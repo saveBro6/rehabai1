@@ -22,7 +22,7 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { getProtectedHref } from "@/lib/auth-navigation";
 import { visiblePricingPlans } from "@/lib/subscription-access";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { getDoctors } from "@/services/doctors.service";
 import { getExercises } from "@/services/exercises.service";
@@ -190,7 +190,7 @@ export default function LandingPage() {
           {featuredDoctors.map((doctor) => (
             <Card key={doctor.id} className="border-emerald-100 transition hover:-translate-y-1 hover:shadow-md">
               <Image
-                src={doctor.avatar_url || "/images/placeholders/rehab-equipment.jpg"}
+                src={getImageUrl(doctor.avatar_url)}
                 alt={doctor.full_name}
                 width={800}
                 height={520}
@@ -224,7 +224,7 @@ export default function LandingPage() {
             {featuredExercises.map((exercise) => (
               <Card key={exercise.id} className="border-emerald-100">
                 <Image
-                  src={exercise.image_url || "/images/placeholders/rehab-equipment.jpg"}
+                  src={getImageUrl(exercise.image_url)}
                   alt={exercise.title}
                   width={800}
                   height={520}

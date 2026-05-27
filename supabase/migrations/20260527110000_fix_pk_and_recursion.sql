@@ -209,7 +209,7 @@ BEGIN
     'authenticated',
     'authenticated',
     'doctor@test.com',
-    crypt('1111', gen_salt('bf')),
+    extensions.crypt('1111', extensions.gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}',
     '{"full_name":"Test Doctor"}',

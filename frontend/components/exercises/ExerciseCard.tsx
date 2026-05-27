@@ -5,6 +5,7 @@ import { Clock, Dumbbell } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { getProtectedHref } from "@/lib/auth-navigation";
+import { getImageUrl } from "@/lib/utils";
 import type { Exercise } from "@/types";
 
 export function ExerciseCard({ exercise, isAuthenticated = false }: { exercise: Exercise; isAuthenticated?: boolean }) {
@@ -13,7 +14,7 @@ export function ExerciseCard({ exercise, isAuthenticated = false }: { exercise: 
   return (
     <Card className="flex h-full flex-col overflow-hidden p-0">
       <Image
-        src={exercise.image_url || "/images/placeholders/rehab-equipment.jpg"}
+        src={getImageUrl(exercise.image_url)}
         alt={exercise.title}
         width={800}
         height={520}

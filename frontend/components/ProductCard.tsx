@@ -10,7 +10,7 @@ import { Card } from "@/components/Card";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { getProtectedHref } from "@/lib/auth-navigation";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { addToCart as addCartItem } from "@/services/cart.service";
 import type { Product } from "@/types";
 
@@ -46,7 +46,7 @@ export function ProductCard({ product, isAuthenticated = false }: { product: Pro
   return (
     <Card className="flex h-full flex-col overflow-hidden p-0">
       <Image
-        src={product.image_url || "/images/placeholders/rehab-equipment.jpg"}
+        src={getImageUrl(product.image_url)}
         alt={product.name}
         width={800}
         height={520}
