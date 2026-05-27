@@ -202,7 +202,25 @@ DECLARE
 BEGIN
   -- Insert into auth.users (which triggers handle_new_auth_user)
   insert into auth.users (
-    id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+    id,
+    instance_id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    confirmation_token,
+    recovery_token,
+    email_change_token_new,
+    email_change,
+    phone_change,
+    phone_change_token,
+    email_change_token_current,
+    reauthentication_token,
+    raw_app_meta_data,
+    raw_user_meta_data,
+    created_at,
+    updated_at
   ) values (
     v_user_id,
     '00000000-0000-0000-0000-000000000000',
@@ -211,6 +229,14 @@ BEGIN
     'doctor@test.com',
     extensions.crypt('1111', extensions.gen_salt('bf')),
     now(),
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
     '{"provider":"email","providers":["email"]}',
     '{"full_name":"Test Doctor"}',
     now(),
