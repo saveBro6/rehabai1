@@ -1,0 +1,42 @@
+import { assertNoSupabaseError, getSupabase } from "@/services/common";
+import type { Doctor } from "@/types";
+
+export async function getDoctors(filters?: { specialty?: string }) {
+  const supabase = getSupabase();
+  let query = supabase.from("doctors").select("*").order("created_at", { ascending: false });
+
+  if (filters?.specialty) {
+    query = query.eq("specialty", filters.specialty);
+  }
+
+  const { data, error } = await query;
+  assertNoSupabaseError(error);
+  return (data || []) as Doctor[];
+}
+
+export async function getDoctorById(id: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("doctors").select("*").eq("id", id).maybeSingle();
+  assertNoSupabaseError(error);
+  return data as Doctor | null;
+}
+
+export async function createDoctor(payload: Omit<Doctor, "id" | "created_at">) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("doctors").insert(payload).select("*").single();
+  assertNoSupabaseError(error);
+  return data as Doctor;
+}
+
+export async function updateDoctor(id: string, payload: Partial<Omit<Doctor, "id" | "created_at">>) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("doctors").update(payload).eq("id", id).select("*").single();
+  assertNoSupabaseError(error);
+  return data as Doctor;
+}
+
+export async function deleteDoctor(id: string) {
+  const supabase = getSupabase();
+  const { error } = await supabase.from("doctors").delete().eq("id", id);
+  assertNoSupabaseError(error);
+}
