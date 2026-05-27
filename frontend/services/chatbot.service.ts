@@ -32,7 +32,7 @@ export function buildChatbotReply(message: string) {
     return "Bạn có thể tạo lộ trình tại mục Lộ trình tập luyện bằng cách chọn tình trạng, mục tiêu, vùng cơ thể cần tập trung, độ khó và số buổi mỗi tuần.";
   }
   if (text.includes("tiến trình") || text.includes("tien trinh") || text.includes("progress")) {
-    return "Mục Theo dõi tiến trình hiển thị số buổi đã tập, bài tập đã hoàn thành, streak, mức đau/mệt và mobility score theo thời gian.";
+    return "Mục Theo dõi tiến trình hiển thị số buổi đã tập, bài tập đã hoàn thành, streak, mức đau/mệt và khả năng cử động theo thời gian.";
   }
   if (text.includes("bài tập") || text.includes("bai tap") || text.includes("tập")) {
     return "Bạn có thể bắt đầu bằng các bài tập beginner trong Thư viện bài tập, lọc theo vùng cơ thể và mục tiêu. Nếu bài tập liên quan tình trạng bệnh cụ thể, hãy xác nhận với bác sĩ hoặc chuyên gia trước khi tập.";

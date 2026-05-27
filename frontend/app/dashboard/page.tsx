@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/Button";
@@ -18,6 +19,7 @@ import { getRecoveryPlans } from "@/services/recovery-plans.service";
 import type { Appointment, Exercise, ProgressSummary, RecoveryPlan, UserSubscription } from "@/types";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { user, profile } = useAuth();
   const { planName, subscription: currentSubscription, isLoading: isSubscriptionLoading } = useSubscriptionAccess();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -27,7 +29,15 @@ export default function DashboardPage() {
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
 
   useEffect(() => {
-    if (isSubscriptionLoading || !user) return;
+    if (profile?.role === "doctor") {
+      router.replace(profile.must_change_password ? "/doctor/change-password" : "/doctor/dashboard");
+    } else if (profile?.role === "admin") {
+      router.replace("/admin");
+    }
+  }, [profile, router]);
+
+  useEffect(() => {
+    if (isSubscriptionLoading || !user || profile?.role === "doctor" || profile?.role === "admin") return;
 
     const canUseExercises = hasPlanAccess(planName, "Basic");
     const canUseRecoveryPlan = hasPlanAccess(planName, "Standard");
@@ -81,7 +91,7 @@ export default function DashboardPage() {
           {canUseProgress ? (
             <>
               <p className="mt-4 text-3xl font-bold text-emerald-700">{progress?.latest_mobility_score || 0}</p>
-              <p className="mt-2 text-sm text-slate-600">Mobility score gần nhất · {progress?.completed_exercises || 0} bài đã hoàn thành</p>
+              <p className="mt-2 text-sm text-slate-600">Khả năng cử động gần nhất · {progress?.completed_exercises || 0} bài đã hoàn thành</p>
               <Link href="/progress"><Button variant="secondary" className="mt-5 w-full">Xem tiến trình</Button></Link>
             </>
           ) : (

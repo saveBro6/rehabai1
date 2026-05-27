@@ -28,7 +28,7 @@ export function ExerciseFilter({
 
   return (
     <div className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-4">
-      <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Tim bai tap..." value={filters.search} onChange={(event) => onChange({ ...filters, search: event.target.value })} />
+      <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Tìm bài tập..." value={filters.search} onChange={(event) => onChange({ ...filters, search: event.target.value })} />
       <select aria-label="Loại phục hồi" className={selectClassName} value={filters.category} onChange={(event) => onChange({ ...filters, category: event.target.value })}>
         <option value="">Tất cả loại phục hồi</option>
         {options.categories.map((item) => <option key={item} value={item}>{item}</option>)}

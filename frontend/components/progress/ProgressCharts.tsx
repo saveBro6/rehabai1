@@ -18,14 +18,14 @@ export function ProgressCharts({ progress }: { progress: ProgressSummary }) {
         </div>
       </Card>
       <Card>
-        <h2 className="text-xl font-bold">Mobility score</h2>
+        <h2 className="text-xl font-bold">Khả năng cử động</h2>
         <div className="mt-5 flex h-48 items-end gap-3">
           {progress.mobility_trend.length ? progress.mobility_trend.map((item) => (
             <div key={`${item.date}-${item.mobility_score}`} className="flex flex-1 flex-col items-center gap-2">
               <div className="w-full rounded-t-lg bg-emerald-500" style={{ height: `${Math.max(8, item.mobility_score)}%` }} />
               <span className="text-xs text-slate-500">{item.date.slice(5)}</span>
             </div>
-          )) : <p className="self-start text-sm text-slate-500">Chua co mobility score.</p>}
+          )) : <p className="self-start text-sm text-slate-500">Chưa có số liệu về khả năng cử động.</p>}
         </div>
       </Card>
     </div>

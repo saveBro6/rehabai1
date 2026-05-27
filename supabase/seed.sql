@@ -1,18 +1,3 @@
-insert into public.users (id, full_name, email, phone, role, date_of_birth, address, medical_condition)
-values
-  ('11111111-1111-4111-8111-111111111111', 'Nguyen Van An', 'an@example.com', '0901000001', 'patient', '1968-04-12', 'Quan 7, TP.HCM', 'Phuc hoi sau dot quy'),
-  ('22222222-2222-4222-8222-222222222222', 'Tran Thi Binh', 'binh@example.com', '0901000002', 'admin', '1985-09-20', 'Quan 1, TP.HCM', null)
-on conflict (email) do nothing;
-
-insert into public.doctors (id, full_name, specialty, avatar_url, bio, experience_years, rating, consultation_fee, available_online)
-values
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'BS. Lê Minh Khoa', 'Phục hồi chức năng', '/images/doctors/le-minh-khoa.jpg', 'Chuyên điều trị phục hồi sau đột quỵ và chấn thương.', 12, 4.9, 350000, true),
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', 'ThS. Nguyễn Hà My', 'Vật lý trị liệu', '/images/doctors/nguyen-ha-my.jpg', 'Tập trung vào bài tập cá nhân hóa và phục hồi khả năng di chuyển.', 9, 4.8, 280000, true),
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'BS. Phạm Đức Trí', 'Thần kinh', '/images/doctors/pham-duc-tri.jpg', 'Tư vấn theo dõi biến chứng thần kinh sau đột quỵ.', 15, 4.9, 450000, true),
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4', 'BS. Võ Anh Thư', 'Cơ xương khớp', '/images/doctors/vo-anh-thu.jpg', 'Hỗ trợ phục hồi sau chấn thương và đau mỏi vận động.', 10, 4.7, 320000, false),
-  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5', 'CNDD. Hoàng Ngọc Lan', 'Dinh dưỡng phục hồi', '/images/doctors/hoang-ngoc-lan.jpg', 'Tư vấn dinh dưỡng giúp người bệnh có nền tảng phục hồi tốt hơn.', 8, 4.8, 250000, true)
-on conflict (id) do nothing;
-
 insert into public.products (id, name, description, category, price, image_url, stock_quantity, is_recommended)
 values
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1', 'Bộ bóng mềm tập nắm tay', 'Dụng cụ tập lực nắm và vận động bàn tay cho người cần phục hồi sau đột quỵ.', 'Dụng cụ tập tay', 180000, '/images/products/hand-grip.jpg', 40, true),
@@ -52,7 +37,12 @@ with test_accounts as (
     values
       ('10000000-0000-4000-8000-000000000001'::uuid, 'patient@test.com', 'Test Patient', 'patient'),
       ('10000000-0000-4000-8000-000000000002'::uuid, 'admin@test.com', 'Test Admin', 'admin'),
-      ('10000000-0000-4000-8000-000000000003'::uuid, 'doctor@test.com', 'Test Doctor', 'doctor')
+      ('10000000-0000-4000-8000-000000000003'::uuid, 'doctor@test.com', 'Test Doctor', 'doctor'),
+      ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid, 'doctor1@test.com', 'BS. Lê Minh Khoa', 'doctor'),
+      ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'::uuid, 'doctor2@test.com', 'ThS. Nguyễn Hà My', 'doctor'),
+      ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'::uuid, 'doctor3@test.com', 'BS. Phạm Đức Trí', 'doctor'),
+      ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4'::uuid, 'doctor4@test.com', 'BS. Võ Anh Thư', 'doctor'),
+      ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5'::uuid, 'doctor5@test.com', 'CNDD. Hoàng Ngọc Lan', 'doctor')
   ) as accounts(id, email, full_name, role)
 ),
 resolved_accounts as (
@@ -162,12 +152,49 @@ set
   identity_data = excluded.identity_data,
   updated_at = now();
 
-insert into public.users (id, full_name, email, role)
+insert into public.accounts (id, email, account_type)
 values
-  ('10000000-0000-4000-8000-000000000001', 'Test Patient', 'patient@test.com', 'patient'),
-  ('10000000-0000-4000-8000-000000000002', 'Test Admin', 'admin@test.com', 'admin'),
-  ('10000000-0000-4000-8000-000000000003', 'Test Doctor', 'doctor@test.com', 'doctor')
-on conflict (email) do update
+  ('10000000-0000-4000-8000-000000000001', 'patient@test.com', 'patient'),
+  ('10000000-0000-4000-8000-000000000002', 'admin@test.com', 'admin'),
+  ('10000000-0000-4000-8000-000000000003', 'doctor@test.com', 'doctor'),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'doctor1@test.com', 'doctor'),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', 'doctor2@test.com', 'doctor'),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'doctor3@test.com', 'doctor'),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4', 'doctor4@test.com', 'doctor'),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5', 'doctor5@test.com', 'doctor')
+on conflict (id) do update
 set
-  full_name = excluded.full_name,
-  role = excluded.role;
+  email = excluded.email,
+  account_type = excluded.account_type;
+
+-- Clean up mistakenly created patients for non-patients
+delete from public.patients
+where id in (
+  ('10000000-0000-4000-8000-000000000002'::uuid),
+  ('10000000-0000-4000-8000-000000000003'::uuid),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'::uuid),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'::uuid),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4'::uuid),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5'::uuid)
+);
+
+insert into public.patients (id, full_name)
+values
+  ('10000000-0000-4000-8000-000000000001', 'Test Patient')
+on conflict (id) do update
+set full_name = excluded.full_name;
+
+update public.accounts
+set must_change_password = true
+where id = '10000000-0000-4000-8000-000000000003'
+  and account_type = 'doctor';
+
+insert into public.doctors (id, full_name, specialty, avatar_url, bio, experience_years, rating, consultation_fee, available_online)
+values
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'BS. Lê Minh Khoa', 'Phục hồi chức năng', '/images/doctors/le-minh-khoa.jpg', 'Chuyên điều trị phục hồi sau đột quỵ và chấn thương.', 12, 4.9, 350000, true),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', 'ThS. Nguyễn Hà My', 'Vật lý trị liệu', '/images/doctors/nguyen-ha-my.jpg', 'Tập trung vào bài tập cá nhân hóa và phục hồi khả năng di chuyển.', 9, 4.8, 280000, true),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'BS. Phạm Đức Trí', 'Thần kinh', '/images/doctors/pham-duc-tri.jpg', 'Tư vấn theo dõi biến chứng thần kinh sau đột quỵ.', 15, 4.9, 450000, true),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4', 'BS. Võ Anh Thư', 'Cơ xương khớp', '/images/doctors/vo-anh-thu.jpg', 'Hỗ trợ phục hồi sau chấn thương và đau mỏi vận động.', 10, 4.7, 320000, false),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5', 'CNDD. Hoàng Ngọc Lan', 'Dinh dưỡng phục hồi', '/images/doctors/hoang-ngoc-lan.jpg', 'Tư vấn dinh dưỡng giúp người bệnh có nền tảng phục hồi tốt hơn.', 8, 4.8, 250000, true)
+on conflict (id) do update set full_name = excluded.full_name, specialty = excluded.specialty, avatar_url = excluded.avatar_url, bio = excluded.bio, experience_years = excluded.experience_years, rating = excluded.rating, consultation_fee = excluded.consultation_fee, available_online = excluded.available_online;

@@ -5,10 +5,10 @@ import type { ProgressSummary } from "@/types";
 
 export function ProgressSummaryCards({ progress }: { progress: ProgressSummary }) {
   const items = [
-    { label: "Buoi tap", value: progress.completed_sessions, icon: Activity },
-    { label: "Bai tap hoan thanh", value: progress.completed_exercises, icon: ListChecks },
-    { label: "Streak", value: `${progress.current_streak} ngay`, icon: Flame },
-    { label: "Mobility score", value: progress.latest_mobility_score, icon: Gauge }
+    { label: "Buổi tập", value: progress.completed_sessions, icon: Activity },
+    { label: "Bài tập hoàn thành", value: progress.completed_exercises, icon: ListChecks },
+    { label: "Chuỗi", value: `${progress.current_streak} ngay`, icon: Flame },
+    { label: "Khả năng cử động", value: progress.latest_mobility_score, icon: Gauge }
   ];
 
   return (

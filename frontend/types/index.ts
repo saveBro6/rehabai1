@@ -1,23 +1,44 @@
 export type Role = "patient" | "doctor" | "therapist" | "admin";
-export type AppointmentStatus = "pending" | "confirmed" | "completed" | "cancelled";
+export type AppointmentStatus = "pending" | "confirmed" | "completed" | "cancelled" | "rejected";
+export type PaymentStatus = "unpaid" | "paid" | "refunded";
+export type AccountStatus = "active" | "inactive" | "locked";
+export type DoctorScheduleStatus = "available" | "booked" | "blocked" | "cancelled";
 export type ConsultationType = "online";
 export type ExerciseDifficulty = "beginner" | "intermediate" | "advanced" | "Cơ bản" | "Trung cấp" | "Nâng cao";
 export type PlanStatus = "active" | "paused" | "completed" | "cancelled";
 
-export interface User {
+export interface Account {
   id: string;
-  full_name: string;
   email: string;
+  password_hash?: string | null;
+  account_type: "admin" | "doctor" | "patient";
+  must_change_password?: boolean;
+  account_status?: AccountStatus;
+  created_at?: string;
+}
+
+export interface Patient {
+  id: string;
+  account_id: string;
+  full_name: string;
   phone?: string;
-  role: Role;
   date_of_birth?: string;
   address?: string;
   medical_condition?: string;
+  gender?: "male" | "female" | "other";
+}
+
+export interface User extends Patient {
+  email: string;
+  role: Role;
+  must_change_password?: boolean;
+  account_status?: AccountStatus;
   created_at?: string;
 }
 
 export interface Doctor {
   id: string;
+  account_id?: string | null;
   full_name: string;
   specialty: string;
   avatar_url?: string;
@@ -38,7 +59,56 @@ export interface Appointment {
   consultation_type: ConsultationType;
   symptoms_description?: string;
   status: AppointmentStatus;
+  payment_status?: PaymentStatus;
+  meeting_url?: string | null;
+  cancel_reason?: string | null;
+  reject_reason?: string | null;
+  reschedule_note?: string | null;
+  completed_at?: string | null;
   created_at?: string;
+}
+
+export interface AppointmentWithPatient extends Appointment {
+  patient?: User | null;
+}
+
+export interface DoctorScheduleSlot {
+  id: string;
+  doctor_id: string;
+  slot_date: string;
+  start_time: string;
+  end_time: string;
+  status: DoctorScheduleStatus;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DoctorNote {
+  id: string;
+  doctor_id: string;
+  patient_id: string;
+  appointment_id?: string | null;
+  note: string;
+  created_at?: string;
+  updated_at?: string;
+  patient?: User | null;
+  appointment?: Appointment | null;
+}
+
+export interface Notification {
+  id: string;
+  account_id: string;
+  title: string;
+  content: string;
+  type: string;
+  is_read: boolean;
+  created_at?: string;
+}
+
+export interface DoctorPatientSummary {
+  patient: User;
+  appointment_count: number;
+  latest_appointment_date: string;
 }
 
 export interface Product {

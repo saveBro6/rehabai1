@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 const items = [
   { label: "Buổi tập tuần này", value: "3", icon: CalendarCheck },
   { label: "Bài tập gợi ý", value: "5", icon: Dumbbell },
-  { label: "Mobility score", value: "72", icon: Gauge },
+  { label: "Khả năng cử động", value: "72", icon: Gauge },
   { label: "Streak tập luyện", value: "3 ngày", icon: Activity }
 ];
 

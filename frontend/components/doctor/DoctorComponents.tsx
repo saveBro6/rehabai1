@@ -1,0 +1,692 @@
+"use client";
+
+import Link from "next/link";
+import { FormEvent, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes, useMemo, useState } from "react";
+import { CalendarPlus, Check, Eye, RotateCcw, X } from "lucide-react";
+
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { addMinutesToTime } from "@/services/doctor-schedules.service";
+import type {
+  AppointmentStatus,
+  AppointmentWithPatient,
+  Doctor,
+  DoctorNote,
+  DoctorPatientSummary,
+  DoctorScheduleSlot,
+  DoctorScheduleStatus,
+  Notification,
+  PaymentStatus
+} from "@/types";
+
+export type AppointmentFilter = "all" | AppointmentStatus | "today" | "upcoming";
+
+const appointmentStatusLabels: Record<AppointmentStatus, string> = {
+  pending: "Chờ xác nhận",
+  confirmed: "Đã xác nhận",
+  completed: "Hoàn thành",
+  cancelled: "Đã hủy",
+  rejected: "Đã từ chối"
+};
+
+const paymentLabels: Record<PaymentStatus, string> = {
+  unpaid: "Chưa thanh toán",
+  paid: "Đã thanh toán",
+  refunded: "Đã hoàn tiền"
+};
+
+const scheduleLabels: Record<DoctorScheduleStatus, string> = {
+  available: "Còn trống",
+  booked: "Đã được đặt",
+  blocked: "Đã chặn",
+  cancelled: "Đã hủy"
+};
+
+export function formatCurrency(value?: number) {
+  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(value || 0);
+}
+
+export function formatDate(value?: string | null) {
+  if (!value) return "Chưa có";
+  return new Intl.DateTimeFormat("vi-VN").format(new Date(`${value}T00:00:00`));
+}
+
+export function formatDateTime(value?: string | null) {
+  if (!value) return "Chưa có";
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+export function formatTime(value?: string | null) {
+  return value ? value.slice(0, 5) : "--:--";
+}
+
+export function StatusBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "success" | "warning" | "danger" }) {
+  const classes = {
+    neutral: "bg-slate-100 text-slate-700",
+    success: "bg-emerald-100 text-emerald-700",
+    warning: "bg-amber-100 text-amber-700",
+    danger: "bg-rose-100 text-rose-700"
+  };
+  return <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${classes[tone]}`}>{children}</span>;
+}
+
+export function appointmentTone(status: AppointmentStatus) {
+  if (status === "pending") return "warning";
+  if (status === "confirmed" || status === "completed") return "success";
+  if (status === "cancelled" || status === "rejected") return "danger";
+  return "neutral";
+}
+
+export function scheduleTone(status: DoctorScheduleStatus) {
+  if (status === "available") return "success";
+  if (status === "booked") return "warning";
+  if (status === "blocked" || status === "cancelled") return "danger";
+  return "neutral";
+}
+
+export function DoctorDashboardStats({
+  pendingCount,
+  todayCount,
+  upcomingCount,
+  rating
+}: {
+  pendingCount: number;
+  todayCount: number;
+  upcomingCount: number;
+  rating: number;
+}) {
+  const stats = [
+    { label: "Lịch chờ xác nhận", value: pendingCount },
+    { label: "Lịch hôm nay", value: todayCount },
+    { label: "Lịch sắp tới", value: upcomingCount },
+    { label: "Đánh giá trung bình", value: rating.toFixed(1) }
+  ];
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {stats.map((stat) => (
+        <Card key={stat.label}>
+          <p className="text-sm font-semibold text-slate-500">{stat.label}</p>
+          <p className="mt-2 text-3xl font-bold text-slate-950">{stat.value}</p>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export function DoctorPendingAppointments({
+  appointments,
+  onAccept,
+  onReject
+}: {
+  appointments: AppointmentWithPatient[];
+  onAccept: (appointment: AppointmentWithPatient) => void;
+  onReject: (appointment: AppointmentWithPatient) => void;
+}) {
+  return (
+    <DoctorListSection title="Yêu cầu đặt lịch mới" empty="Không có yêu cầu đặt lịch mới.">
+      {appointments.map((appointment) => (
+        <Card key={appointment.id}>
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+            <div>
+              <p className="font-bold text-slate-950">{appointment.patient?.full_name || "Bệnh nhân"}</p>
+              <p className="mt-1 text-sm text-slate-600">{formatDate(appointment.appointment_date)} · {formatTime(appointment.appointment_time)}</p>
+              <p className="mt-2 text-sm text-slate-600">{appointment.symptoms_description || "Không có ghi chú thể trạng."}</p>
+              <p className="mt-2 text-sm font-semibold text-emerald-700">Giá tư vấn hiển thị trong hồ sơ bác sĩ</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => onAccept(appointment)}>Chấp nhận</Button>
+              <Button onClick={() => onReject(appointment)} variant="secondary">Từ chối</Button>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </DoctorListSection>
+  );
+}
+
+export function DoctorTodayAppointments({
+  appointments,
+  onComplete
+}: {
+  appointments: AppointmentWithPatient[];
+  onComplete: (appointment: AppointmentWithPatient) => void;
+}) {
+  return (
+    <DoctorListSection title="Lịch tư vấn hôm nay" empty="Không có lịch tư vấn hôm nay.">
+      {appointments.map((appointment) => (
+        <Card key={appointment.id}>
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+            <div>
+              <p className="font-bold text-slate-950">{formatTime(appointment.appointment_time)} · {appointment.patient?.full_name || "Bệnh nhân"}</p>
+              <p className="mt-1 break-all text-sm text-slate-600">{appointment.meeting_url || "Chưa có meeting URL."}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/doctor/appointments/${appointment.id}`}><Button variant="secondary">Xem chi tiết</Button></Link>
+              <Button onClick={() => onComplete(appointment)}>Hoàn thành</Button>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </DoctorListSection>
+  );
+}
+
+export function DoctorSchedulePreview({ slots }: { slots: DoctorScheduleSlot[] }) {
+  return (
+    <DoctorListSection title="Lịch rảnh gần nhất" empty="Chưa có lịch rảnh gần nhất.">
+      {slots.map((slot) => (
+        <Card key={slot.id}>
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+              <p className="font-bold text-slate-950">{formatDate(slot.slot_date)}</p>
+              <p className="mt-1 text-sm text-slate-600">{formatTime(slot.start_time)} - {formatTime(slot.end_time)}</p>
+            </div>
+            <StatusBadge tone={scheduleTone(slot.status)}>{scheduleLabels[slot.status]}</StatusBadge>
+          </div>
+        </Card>
+      ))}
+      <Link href="/doctor/schedules" className="inline-flex w-fit">
+        <Button><CalendarPlus className="mr-2 h-4 w-4" />Tạo lịch rảnh mới</Button>
+      </Link>
+    </DoctorListSection>
+  );
+}
+
+function DoctorListSection({ title, empty, children }: { title: string; empty: string; children: ReactNode[] | ReactNode }) {
+  const items = Array.isArray(children) ? children.filter(Boolean) : children;
+  const isEmpty = Array.isArray(items) ? items.length === 0 : !items;
+
+  return (
+    <section className="grid gap-4">
+      <h2 className="text-xl font-bold text-slate-950">{title}</h2>
+      {isEmpty ? <Card><p className="text-sm text-slate-500">{empty}</p></Card> : items}
+    </section>
+  );
+}
+
+export function DoctorProfileForm({
+  doctor,
+  loading,
+  onAvatarUpload,
+  onSubmit
+}: {
+  doctor: Doctor;
+  loading: boolean;
+  onSubmit: (payload: Partial<Doctor>) => Promise<void>;
+  onAvatarUpload?: (file: File) => Promise<string>;
+}) {
+  const [draft, setDraft] = useState(doctor);
+  const [uploading, setUploading] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    await onSubmit({
+      avatar_url: draft.avatar_url,
+      full_name: draft.full_name,
+      specialty: draft.specialty,
+      bio: draft.bio,
+      experience_years: Number(draft.experience_years) || 0,
+      consultation_fee: Number(draft.consultation_fee) || 0
+    });
+  }
+
+  return (
+    <Card>
+      <form onSubmit={submit} className="grid gap-4">
+        <label className="grid gap-1.5">
+          <span className="text-sm font-semibold text-slate-700">Upload ảnh đại diện</span>
+          <input
+            accept="image/*"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            disabled={!onAvatarUpload || uploading}
+            type="file"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file || !onAvatarUpload) return;
+              setUploading(true);
+              try {
+                const avatarUrl = await onAvatarUpload(file);
+                setDraft({ ...draft, avatar_url: avatarUrl });
+              } finally {
+                setUploading(false);
+              }
+            }}
+          />
+          {uploading ? <span className="text-xs font-semibold text-emerald-700">Đang upload ảnh...</span> : null}
+        </label>
+        <DoctorInput label="Ảnh đại diện" value={draft.avatar_url || ""} onChange={(value) => setDraft({ ...draft, avatar_url: value })} placeholder="URL ảnh hoặc đường dẫn storage" />
+        <DoctorInput label="Họ tên" value={draft.full_name} onChange={(value) => setDraft({ ...draft, full_name: value })} required />
+        <DoctorInput label="Chuyên khoa" value={draft.specialty} onChange={(value) => setDraft({ ...draft, specialty: value })} required />
+        <DoctorTextarea label="Bio" value={draft.bio || ""} onChange={(value) => setDraft({ ...draft, bio: value })} />
+        <DoctorInput label="Số năm kinh nghiệm" type="number" value={String(draft.experience_years)} onChange={(value) => setDraft({ ...draft, experience_years: Number(value) })} min={0} />
+        <DoctorInput label="Giá tư vấn" type="number" value={String(draft.consultation_fee)} onChange={(value) => setDraft({ ...draft, consultation_fee: Number(value) })} min={0} />
+        <div className="grid gap-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 sm:grid-cols-2">
+          <p>Username: Không cho sửa</p>
+          <p>Email: Không cho sửa</p>
+          <p>Role: doctor</p>
+          <p>Rating: {doctor.rating.toFixed(1)}</p>
+          <p>Trạng thái: {doctor.available_online ? "active" : "inactive"}</p>
+        </div>
+        <Button disabled={loading}>{loading ? "Đang lưu..." : "Lưu thay đổi"}</Button>
+      </form>
+    </Card>
+  );
+}
+
+export function DoctorScheduleForm({ loading, onCreate }: { loading: boolean; onCreate: (date: string, startTime: string) => Promise<void> }) {
+  const [date, setDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const endTime = startTime ? addMinutesToTime(startTime, 60) : "";
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    await onCreate(date, startTime);
+    setDate("");
+    setStartTime("");
+  }
+
+  return (
+    <Card>
+      <form onSubmit={submit} className="grid gap-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
+        <DoctorInput label="Chọn ngày" type="date" value={date} onChange={setDate} required />
+        <DoctorInput label="Chọn giờ bắt đầu" type="time" value={startTime} onChange={setStartTime} required />
+        <DoctorInput label="Giờ kết thúc" value={endTime} onChange={() => undefined} readOnly />
+        <Button disabled={loading}>{loading ? "Đang tạo..." : "Tạo lịch rảnh"}</Button>
+      </form>
+    </Card>
+  );
+}
+
+export function DoctorScheduleList({
+  slots,
+  onStatusChange
+}: {
+  slots: DoctorScheduleSlot[];
+  onStatusChange: (slot: DoctorScheduleSlot, status: DoctorScheduleStatus) => void;
+}) {
+  if (!slots.length) return <Card><p className="text-sm text-slate-500">Chưa có slot lịch rảnh.</p></Card>;
+
+  return (
+    <div className="grid gap-3">
+      {slots.map((slot) => (
+        <Card key={slot.id}>
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto] md:items-center">
+            <div><p className="text-xs font-semibold text-slate-500">Ngày</p><p className="font-bold text-slate-950">{formatDate(slot.slot_date)}</p></div>
+            <div><p className="text-xs font-semibold text-slate-500">Giờ</p><p className="font-bold text-slate-950">{formatTime(slot.start_time)} - {formatTime(slot.end_time)}</p></div>
+            <StatusBadge tone={scheduleTone(slot.status)}>{scheduleLabels[slot.status]}</StatusBadge>
+            <div className="flex flex-wrap gap-2">
+              {slot.status === "available" ? (
+                <>
+                  <Button variant="secondary" onClick={() => onStatusChange(slot, "blocked")}>Chặn</Button>
+                  <Button variant="ghost" onClick={() => onStatusChange(slot, "cancelled")}>Hủy</Button>
+                </>
+              ) : null}
+              {slot.status === "blocked" ? <Button onClick={() => onStatusChange(slot, "available")}>Mở lại</Button> : null}
+              {slot.status === "booked" ? <Button variant="secondary" disabled>Chỉ xem</Button> : null}
+              {slot.status === "cancelled" ? <span className="text-sm text-slate-500">Không thao tác</span> : null}
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export function DoctorAppointmentFilters({ value, onChange }: { value: AppointmentFilter; onChange: (value: AppointmentFilter) => void }) {
+  const filters: Array<{ label: string; value: AppointmentFilter }> = [
+    { label: "Tất cả", value: "all" },
+    { label: "Chờ xác nhận", value: "pending" },
+    { label: "Đã xác nhận", value: "confirmed" },
+    { label: "Hoàn thành", value: "completed" },
+    { label: "Đã hủy", value: "cancelled" },
+    { label: "Đã từ chối", value: "rejected" },
+    { label: "Hôm nay", value: "today" },
+    { label: "Sắp tới", value: "upcoming" }
+  ];
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {filters.map((filter) => (
+        <Button key={filter.value} onClick={() => onChange(filter.value)} variant={value === filter.value ? "primary" : "secondary"}>
+          {filter.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+export function DoctorAppointmentTable({
+  appointments,
+  onAccept,
+  onReject,
+  onCancel,
+  onComplete,
+  onReschedule
+}: {
+  appointments: AppointmentWithPatient[];
+  onAccept: (appointment: AppointmentWithPatient) => void;
+  onReject: (appointment: AppointmentWithPatient) => void;
+  onCancel: (appointment: AppointmentWithPatient) => void;
+  onComplete: (appointment: AppointmentWithPatient) => void;
+  onReschedule: (appointment: AppointmentWithPatient) => void;
+}) {
+  if (!appointments.length) return <Card><p className="text-sm text-slate-500">Không có lịch hẹn phù hợp.</p></Card>;
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <table className="min-w-[980px] w-full text-left text-sm">
+        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <tr>
+            <th className="px-4 py-3">Bệnh nhân</th>
+            <th className="px-4 py-3">Ngày</th>
+            <th className="px-4 py-3">Giờ</th>
+            <th className="px-4 py-3">Trạng thái</th>
+            <th className="px-4 py-3">Thanh toán</th>
+            <th className="px-4 py-3">Ghi chú thể trạng</th>
+            <th className="px-4 py-3">Hành động</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {appointments.map((appointment) => (
+            <tr key={appointment.id}>
+              <td className="px-4 py-3 font-semibold text-slate-950">{appointment.patient?.full_name || "Bệnh nhân"}</td>
+              <td className="px-4 py-3">{formatDate(appointment.appointment_date)}</td>
+              <td className="px-4 py-3">{formatTime(appointment.appointment_time)}</td>
+              <td className="px-4 py-3"><StatusBadge tone={appointmentTone(appointment.status)}>{appointmentStatusLabels[appointment.status]}</StatusBadge></td>
+              <td className="px-4 py-3">{paymentLabels[appointment.payment_status || "unpaid"]}</td>
+              <td className="max-w-[240px] px-4 py-3 text-slate-600">{appointment.symptoms_description || "Không có"}</td>
+              <td className="px-4 py-3">
+                <AppointmentActions appointment={appointment} onAccept={onAccept} onCancel={onCancel} onComplete={onComplete} onReject={onReject} onReschedule={onReschedule} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AppointmentActions(props: {
+  appointment: AppointmentWithPatient;
+  onAccept: (appointment: AppointmentWithPatient) => void;
+  onReject: (appointment: AppointmentWithPatient) => void;
+  onCancel: (appointment: AppointmentWithPatient) => void;
+  onComplete: (appointment: AppointmentWithPatient) => void;
+  onReschedule: (appointment: AppointmentWithPatient) => void;
+}) {
+  const { appointment } = props;
+  if (appointment.status === "pending") {
+    return <div className="flex flex-wrap gap-2"><Button onClick={() => props.onAccept(appointment)}>Chấp nhận</Button><Button variant="secondary" onClick={() => props.onReject(appointment)}>Từ chối</Button></div>;
+  }
+  if (appointment.status === "confirmed") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Link href={`/doctor/appointments/${appointment.id}`}><Button variant="secondary">Xem chi tiết</Button></Link>
+        <Button variant="ghost" onClick={() => props.onReschedule(appointment)}>Yêu cầu đổi lịch</Button>
+        <Button variant="ghost" onClick={() => props.onCancel(appointment)}>Hủy lịch</Button>
+        <Button onClick={() => props.onComplete(appointment)}>Hoàn thành</Button>
+      </div>
+    );
+  }
+  if (appointment.status === "completed") {
+    return <Link href={`/doctor/notes`}><Button variant="secondary">Xem ghi chú</Button></Link>;
+  }
+  return <Link href={`/doctor/appointments/${appointment.id}`}><Button variant="secondary">Xem lý do</Button></Link>;
+}
+
+export function DoctorAppointmentDetail({
+  appointment,
+  onAccept,
+  onReject,
+  onCancel,
+  onComplete,
+  onReschedule
+}: {
+  appointment: AppointmentWithPatient;
+  onAccept: () => void;
+  onReject: () => void;
+  onCancel: () => void;
+  onComplete: () => void;
+  onReschedule: () => void;
+}) {
+  return (
+    <Card>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="grid gap-4">
+          <DoctorPatientInfoCard appointment={appointment} />
+          <DetailRow label="Ngày giờ tư vấn" value={`${formatDate(appointment.appointment_date)} · ${formatTime(appointment.appointment_time)}`} />
+          <DetailRow label="Trạng thái appointment" value={appointmentStatusLabels[appointment.status]} />
+          <DetailRow label="Trạng thái thanh toán" value={paymentLabels[appointment.payment_status || "unpaid"]} />
+          <DetailRow label="Ghi chú thể trạng hiện tại" value={appointment.symptoms_description || "Không có"} />
+          <DetailRow label="Meeting URL" value={appointment.meeting_url || "Chưa có meeting URL"} />
+          {appointment.cancel_reason ? <DetailRow label="Lý do hủy" value={appointment.cancel_reason} /> : null}
+          {appointment.reject_reason ? <DetailRow label="Lý do từ chối" value={appointment.reject_reason} /> : null}
+          {appointment.reschedule_note ? <DetailRow label="Yêu cầu đổi lịch" value={appointment.reschedule_note} /> : null}
+        </div>
+        <div className="grid content-start gap-2">
+          {appointment.status === "pending" ? <><Button onClick={onAccept}>Chấp nhận</Button><Button onClick={onReject} variant="secondary">Từ chối</Button></> : null}
+          {appointment.status === "confirmed" ? <><Button onClick={onComplete}>Hoàn thành</Button><Button onClick={onReschedule} variant="secondary">Yêu cầu đổi lịch</Button><Button onClick={onCancel} variant="ghost">Hủy lịch</Button></> : null}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return <div><p className="text-sm font-semibold text-slate-500">{label}</p><p className="mt-1 break-words font-medium text-slate-950">{value}</p></div>;
+}
+
+export function DoctorPatientInfoCard({ appointment }: { appointment: AppointmentWithPatient }) {
+  const patient = appointment.patient;
+  return (
+    <div className="rounded-lg bg-slate-50 p-4">
+      <p className="text-sm font-semibold text-slate-500">Thông tin bệnh nhân</p>
+      <p className="mt-2 text-lg font-bold text-slate-950">{patient?.full_name || "Bệnh nhân"}</p>
+      <p className="text-sm text-slate-600">{patient?.phone || "Chưa có số điện thoại"}</p>
+      <p className="text-sm text-slate-600">{patient?.date_of_birth ? formatDate(patient.date_of_birth) : "Chưa có ngày sinh"}</p>
+      <p className="mt-2 text-sm text-slate-600">{patient?.medical_condition || "Chưa có tóm tắt tình trạng."}</p>
+    </div>
+  );
+}
+
+export function DoctorPatientsTable({ patients }: { patients: DoctorPatientSummary[] }) {
+  if (!patients.length) return <Card><p className="text-sm text-slate-500">Chưa có bệnh nhân từng đặt lịch.</p></Card>;
+
+  return (
+    <div className="grid gap-3">
+      {patients.map((summary) => (
+        <Card key={summary.patient.id}>
+          <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_1fr_auto] lg:items-center">
+            <div><p className="font-bold text-slate-950">{summary.patient.full_name}</p><p className="text-sm text-slate-600">{summary.patient.phone || "Chưa có số điện thoại"}</p></div>
+            <div><p className="text-xs font-semibold text-slate-500">Ngày sinh</p><p>{summary.patient.date_of_birth ? formatDate(summary.patient.date_of_birth) : "Chưa có"}</p></div>
+            <div><p className="text-xs font-semibold text-slate-500">Giới tính</p><p>{summary.patient.gender || "Chưa có"}</p></div>
+            <div><p className="text-xs font-semibold text-slate-500">Số lần tư vấn</p><p>{summary.appointment_count} · {formatDate(summary.latest_appointment_date)}</p></div>
+            <Button variant="secondary">Xem lịch sử</Button>
+            <p className="lg:col-span-5 text-sm text-slate-600">{summary.patient.medical_condition || "Chưa có tóm tắt tình trạng."}</p>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export function DoctorNotesList({ notes }: { notes: DoctorNote[] }) {
+  if (!notes.length) return <Card><p className="text-sm text-slate-500">Chưa có ghi chú sau tư vấn.</p></Card>;
+
+  return (
+    <div className="grid gap-3">
+      {notes.map((note) => (
+        <Card key={note.id}>
+          <div className="flex flex-col justify-between gap-3 sm:flex-row">
+            <div>
+              <p className="font-bold text-slate-950">{note.patient?.full_name || "Bệnh nhân"}</p>
+              <p className="mt-1 text-sm text-slate-500">{formatDateTime(note.created_at)}</p>
+              <p className="mt-3 text-slate-700">{note.note}</p>
+            </div>
+            {note.appointment_id ? <Link href={`/doctor/appointments/${note.appointment_id}`}><Button variant="secondary">Xem appointment</Button></Link> : null}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export function DoctorNotificationsList({
+  notifications,
+  onRead,
+  onReadAll
+}: {
+  notifications: Notification[];
+  onRead: (notification: Notification) => void;
+  onReadAll: () => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <div className="flex justify-end">
+        <Button onClick={onReadAll} variant="secondary">Đánh dấu tất cả đã đọc</Button>
+      </div>
+      {!notifications.length ? <Card><p className="text-sm text-slate-500">Chưa có thông báo.</p></Card> : null}
+      {notifications.map((notification) => (
+        <Card key={notification.id} className={notification.is_read ? "bg-white" : "border-emerald-200 bg-emerald-50/50"}>
+          <div className="flex flex-col justify-between gap-3 sm:flex-row">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-bold text-slate-950">{notification.title}</p>
+                <StatusBadge tone={notification.is_read ? "neutral" : "success"}>{notification.is_read ? "Đã đọc" : "Chưa đọc"}</StatusBadge>
+              </div>
+              <p className="mt-1 text-sm text-slate-600">{notification.content}</p>
+              <p className="mt-2 text-xs text-slate-500">{notification.type} · {formatDateTime(notification.created_at)}</p>
+            </div>
+            {!notification.is_read ? <Button onClick={() => onRead(notification)} variant="secondary">Đánh dấu đã đọc</Button> : null}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export function DoctorCompleteAppointmentDialog({
+  open,
+  loading,
+  onClose,
+  onConfirm
+}: DialogProps & { onConfirm: (note: string) => Promise<void> }) {
+  return <TextDialog open={open} loading={loading} title="Hoàn thành lịch hẹn" label="Ghi chú/kết luận sau tư vấn" action="Xác nhận hoàn thành" onClose={onClose} onConfirm={onConfirm} required />;
+}
+
+export function DoctorRejectAppointmentDialog(props: DialogProps & { onConfirm: (reason: string) => Promise<void> }) {
+  return <TextDialog {...props} title="Từ chối lịch hẹn" label="Lý do từ chối" action="Xác nhận từ chối" required />;
+}
+
+export function DoctorCancelAppointmentDialog(props: DialogProps & { onConfirm: (reason: string) => Promise<void> }) {
+  return <TextDialog {...props} title="Hủy lịch hẹn" label="Lý do hủy" action="Xác nhận hủy" required />;
+}
+
+export function DoctorRescheduleDialog(props: DialogProps & { onConfirm: (note: string) => Promise<void> }) {
+  return <TextDialog {...props} title="Yêu cầu đổi lịch" label="Nội dung yêu cầu đổi lịch" action="Gửi yêu cầu" required />;
+}
+
+type DialogProps = {
+  open: boolean;
+  loading: boolean;
+  onClose: () => void;
+};
+
+function TextDialog({
+  open,
+  title,
+  label,
+  action,
+  loading,
+  required,
+  onClose,
+  onConfirm
+}: DialogProps & {
+  title: string;
+  label: string;
+  action: string;
+  required?: boolean;
+  onConfirm: (value: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (required && !value.trim()) return;
+    await onConfirm(value.trim());
+    setValue("");
+  }
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4">
+      <Card className="w-full max-w-lg">
+        <form onSubmit={submit} className="grid gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold text-slate-950">{title}</h2>
+            <button aria-label="Đóng" className="rounded-lg p-2 hover:bg-slate-100" onClick={onClose} type="button"><X className="h-5 w-5" /></button>
+          </div>
+          <DoctorTextarea label={label} value={value} onChange={setValue} required={required} />
+          <div className="flex justify-end gap-2">
+            <Button onClick={onClose} type="button" variant="secondary">Đóng</Button>
+            <Button disabled={loading || (required && !value.trim())}>{loading ? "Đang xử lý..." : action}</Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+function DoctorInput({
+  label,
+  value,
+  onChange,
+  ...props
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">) {
+  const id = useMemo(() => label.toLowerCase().replace(/\s+/g, "-"), [label]);
+  return (
+    <label htmlFor={id} className="grid gap-1.5">
+      <span className="text-sm font-semibold text-slate-700">{label}</span>
+      <input id={id} className="rounded-lg border border-slate-300 px-3 py-2 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-50" value={value} onChange={(event) => onChange(event.target.value)} {...props} />
+    </label>
+  );
+}
+
+function DoctorTextarea({
+  label,
+  value,
+  onChange,
+  ...props
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+} & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChange">) {
+  const id = useMemo(() => label.toLowerCase().replace(/\s+/g, "-"), [label]);
+  return (
+    <label htmlFor={id} className="grid gap-1.5">
+      <span className="text-sm font-semibold text-slate-700">{label}</span>
+      <textarea id={id} className="min-h-28 rounded-lg border border-slate-300 px-3 py-2 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" value={value} onChange={(event) => onChange(event.target.value)} {...props} />
+    </label>
+  );
+}
+
+export function EmptyState({ children }: { children: ReactNode }) {
+  return <Card><p className="text-sm text-slate-500">{children}</p></Card>;
+}
+
+export function LoadingState({ children = "Đang tải dữ liệu..." }: { children?: ReactNode }) {
+  return <Card><p className="text-sm text-slate-500">{children}</p></Card>;
+}
+
+export function ErrorState({ message }: { message: string }) {
+  return <Card className="border-rose-200 bg-rose-50"><p className="text-sm font-semibold text-rose-700">{message}</p></Card>;
+}
+
+export { Check, Eye, RotateCcw };

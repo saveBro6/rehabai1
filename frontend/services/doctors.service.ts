@@ -29,6 +29,13 @@ export async function getDoctorById(id: string) {
   return data as Doctor | null;
 }
 
+export async function getDoctorByUserId(userId: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("doctors").select("*").eq("id", userId).maybeSingle();
+  assertNoSupabaseError(error);
+  return data as Doctor | null;
+}
+
 export async function createDoctor(payload: Omit<Doctor, "id" | "created_at">) {
   const supabase = getSupabase();
   const { data, error } = await supabase.from("doctors").insert(payload).select("*").single();
@@ -41,6 +48,17 @@ export async function updateDoctor(id: string, payload: Partial<Omit<Doctor, "id
   const { data, error } = await supabase.from("doctors").update(payload).eq("id", id).select("*").single();
   assertNoSupabaseError(error);
   return data as Doctor;
+}
+
+export async function uploadDoctorAvatar(doctorId: string, file: File) {
+  const supabase = getSupabase();
+  const extension = file.name.split(".").pop() || "jpg";
+  const path = `doctors/${doctorId}-${Date.now()}.${extension}`;
+  const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+  assertNoSupabaseError(error);
+
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  return data.publicUrl;
 }
 
 export async function deleteDoctor(id: string) {

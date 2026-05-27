@@ -9,6 +9,7 @@ import { Card } from "@/components/Card";
 import { useToast } from "@/hooks/useToast";
 import { getSupabaseClient, getSupabaseConfigError } from "@/lib/supabase-client";
 import { isSafeRedirectPath } from "@/lib/auth-navigation";
+import { getUserProfile } from "@/services/users.service";
 
 function LoginForm() {
   const router = useRouter();
@@ -31,7 +32,7 @@ function LoginForm() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
 
     if (error) {
@@ -39,10 +40,12 @@ function LoginForm() {
       return;
     }
 
+    const userProfile = data.user ? await getUserProfile(data.user.id) : null;
     const redirectTo = searchParams.get("redirect");
-    const safeRedirect = isSafeRedirectPath(redirectTo) ? redirectTo : "/dashboard";
+    const doctorDefault = userProfile?.role === "doctor" ? (userProfile.must_change_password ? "/doctor/change-password" : "/doctor/dashboard") : "/dashboard";
+    const safeRedirect = isSafeRedirectPath(redirectTo) ? redirectTo : doctorDefault;
     pushToast("Đăng nhập thành công", "Đang chuyển đến trang tiếp theo.");
-    router.push(safeRedirect || "/dashboard");
+    router.push(safeRedirect || doctorDefault);
   }
 
   return (

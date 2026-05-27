@@ -1,19 +1,29 @@
 create extension if not exists "pgcrypto";
 
-create table if not exists public.users (
-  id uuid primary key default gen_random_uuid(),
-  full_name text not null,
+create table if not exists public.accounts (
+  id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
+  password_hash text,
+  account_type text not null default 'patient' check (account_type in ('admin', 'doctor', 'patient')),
+  must_change_password boolean not null default false,
+  account_status text not null default 'active' check (account_status in ('active', 'inactive', 'locked')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.patients (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid not null unique references public.accounts(id) on delete cascade,
+  full_name text not null,
   phone text,
-  role text not null default 'patient' check (role in ('patient', 'doctor', 'therapist', 'admin')),
   date_of_birth date,
   address text,
   medical_condition text,
-  created_at timestamptz not null default now()
+  gender text check (gender in ('male', 'female', 'other'))
 );
 
 create table if not exists public.doctors (
   id uuid primary key default gen_random_uuid(),
+  account_id uuid unique references public.accounts(id) on delete set null,
   full_name text not null,
   specialty text not null,
   avatar_url text,
@@ -28,12 +38,51 @@ create table if not exists public.doctors (
 create table if not exists public.appointments (
   id uuid primary key default gen_random_uuid(),
   doctor_id uuid not null references public.doctors(id) on delete cascade,
-  patient_id uuid not null references public.users(id) on delete cascade,
+  patient_id uuid not null references public.patients(id) on delete cascade,
   appointment_date date not null,
   appointment_time time not null,
   consultation_type text not null check (consultation_type in ('online')),
   symptoms_description text,
-  status text not null default 'pending' check (status in ('pending', 'confirmed', 'completed', 'cancelled')),
+  status text not null default 'pending' check (status in ('pending', 'confirmed', 'completed', 'cancelled', 'rejected')),
+  payment_status text not null default 'unpaid' check (payment_status in ('unpaid', 'paid', 'refunded')),
+  meeting_url text,
+  cancel_reason text,
+  reject_reason text,
+  reschedule_note text,
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.doctor_schedule_slots (
+  id uuid primary key default gen_random_uuid(),
+  doctor_id uuid not null references public.doctors(id) on delete cascade,
+  slot_date date not null,
+  start_time time not null,
+  end_time time not null,
+  status text not null default 'available' check (status in ('available', 'booked', 'blocked', 'cancelled')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (end_time > start_time),
+  unique (doctor_id, slot_date, start_time)
+);
+
+create table if not exists public.doctor_notes (
+  id uuid primary key default gen_random_uuid(),
+  doctor_id uuid not null references public.doctors(id) on delete cascade,
+  patient_id uuid not null references public.patients(id) on delete cascade,
+  appointment_id uuid references public.appointments(id) on delete set null,
+  note text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid not null references public.accounts(id) on delete cascade,
+  title text not null,
+  content text not null,
+  type text not null default 'system',
+  is_read boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -51,7 +100,7 @@ create table if not exists public.products (
 
 create table if not exists public.cart_items (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
+  user_id uuid not null references public.patients(id) on delete cascade,
   product_id uuid not null references public.products(id) on delete cascade,
   quantity int not null default 1 check (quantity > 0),
   created_at timestamptz not null default now(),
@@ -60,7 +109,7 @@ create table if not exists public.cart_items (
 
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
+  user_id uuid not null references public.patients(id) on delete cascade,
   total_amount numeric(12,2) not null default 0 check (total_amount >= 0),
   status text not null default 'pending' check (status in ('pending', 'paid', 'cancelled')),
   shipping_address text,
@@ -87,7 +136,7 @@ create table if not exists public.subscriptions (
 
 create table if not exists public.user_subscriptions (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
+  user_id uuid not null references public.patients(id) on delete cascade,
   subscription_id uuid not null references public.subscriptions(id) on delete restrict,
   start_date date not null default current_date,
   end_date date not null,
@@ -97,7 +146,7 @@ create table if not exists public.user_subscriptions (
 
 create table if not exists public.chatbot_messages (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references public.users(id) on delete set null,
+  user_id uuid references public.patients(id) on delete set null,
   message text not null,
   reply text not null,
   created_at timestamptz not null default now()
@@ -124,7 +173,7 @@ create table if not exists public.exercises (
 
 create table if not exists public.recovery_plans (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references public.users(id) on delete cascade,
+  user_id uuid references public.patients(id) on delete cascade,
   condition_type text not null,
   recovery_goal text not null,
   affected_body_region text not null,
@@ -151,7 +200,7 @@ create table if not exists public.recovery_plan_exercises (
 
 create table if not exists public.exercise_logs (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references public.users(id) on delete cascade,
+  user_id uuid references public.patients(id) on delete cascade,
   recovery_plan_id uuid references public.recovery_plans(id) on delete set null,
   exercise_id uuid references public.exercises(id) on delete set null,
   completed_at timestamptz default now(),
@@ -163,8 +212,13 @@ create table if not exists public.exercise_logs (
 );
 
 create index if not exists idx_doctors_specialty on public.doctors (specialty);
+create index if not exists idx_doctors_account on public.doctors (account_id);
 create index if not exists idx_appointments_patient on public.appointments (patient_id);
 create index if not exists idx_appointments_doctor on public.appointments (doctor_id);
+create index if not exists idx_appointments_doctor_date_status on public.appointments (doctor_id, appointment_date, status);
+create index if not exists idx_doctor_schedule_slots_doctor_date on public.doctor_schedule_slots (doctor_id, slot_date, start_time);
+create index if not exists idx_doctor_notes_doctor_created on public.doctor_notes (doctor_id, created_at desc);
+create index if not exists idx_notifications_account_created on public.notifications (account_id, created_at desc);
 create index if not exists idx_products_category on public.products (category);
 create index if not exists idx_user_subscriptions_user on public.user_subscriptions (user_id);
 create index if not exists idx_chatbot_messages_user_created on public.chatbot_messages (user_id, created_at desc);
@@ -174,9 +228,13 @@ create index if not exists idx_exercises_body_region on public.exercises (body_r
 create index if not exists idx_recovery_plans_user on public.recovery_plans (user_id);
 create index if not exists idx_exercise_logs_user_completed on public.exercise_logs (user_id, completed_at desc);
 
-alter table public.users enable row level security;
+alter table public.accounts enable row level security;
+alter table public.patients enable row level security;
 alter table public.doctors enable row level security;
 alter table public.appointments enable row level security;
+alter table public.doctor_schedule_slots enable row level security;
+alter table public.doctor_notes enable row level security;
+alter table public.notifications enable row level security;
 alter table public.products enable row level security;
 alter table public.cart_items enable row level security;
 alter table public.orders enable row level security;
@@ -189,10 +247,14 @@ alter table public.recovery_plans enable row level security;
 alter table public.recovery_plan_exercises enable row level security;
 alter table public.exercise_logs enable row level security;
 
-revoke all privileges on table public.users from public, anon, authenticated;
+revoke all privileges on table public.accounts from public, anon, authenticated;
+revoke all privileges on table public.patients from public, anon, authenticated;
 revoke all privileges on table public.chatbot_messages from public, anon, authenticated;
 revoke all privileges on table public.doctors from public, anon, authenticated;
 revoke all privileges on table public.appointments from public, anon, authenticated;
+revoke all privileges on table public.doctor_schedule_slots from public, anon, authenticated;
+revoke all privileges on table public.doctor_notes from public, anon, authenticated;
+revoke all privileges on table public.notifications from public, anon, authenticated;
 revoke all privileges on table public.products from public, anon, authenticated;
 revoke all privileges on table public.cart_items from public, anon, authenticated;
 revoke all privileges on table public.orders from public, anon, authenticated;
@@ -203,23 +265,187 @@ revoke all privileges on table public.exercises from public, anon, authenticated
 revoke all privileges on table public.recovery_plans from public, anon, authenticated;
 revoke all privileges on table public.recovery_plan_exercises from public, anon, authenticated;
 revoke all privileges on table public.exercise_logs from public, anon, authenticated;
-grant select on public.users to authenticated;
-grant update (full_name, phone, date_of_birth, address, medical_condition) on public.users to authenticated;
+grant select, insert, update on public.accounts to authenticated;
+grant select, insert, update on public.patients to authenticated;
+grant select on public.doctors, public.products, public.subscriptions, public.exercises to anon, authenticated;
+grant select, insert, update, delete on public.appointments, public.cart_items, public.orders, public.order_items to authenticated;
+grant update (full_name, phone, date_of_birth, address, medical_condition, gender) on public.patients to authenticated;
+grant update (must_change_password) on public.accounts to authenticated;
+grant select, insert, update, delete on public.doctor_schedule_slots to authenticated;
+grant select, insert, update, delete on public.doctor_notes to authenticated;
+grant select, update on public.notifications to authenticated;
+grant update (full_name, specialty, avatar_url, bio, experience_years, consultation_fee, available_online) on public.doctors to authenticated;
+grant update (status, meeting_url, cancel_reason, reject_reason, reschedule_note, completed_at) on public.appointments to authenticated;
 
-drop policy if exists "Users can read own profile" on public.users;
-create policy "Users can read own profile"
-on public.users
+create policy "Accounts can insert own row"
+on public.accounts
+for insert
+to authenticated
+with check (id = (select auth.uid()));
+
+create policy "Accounts can read own row"
+on public.accounts
 for select
 to authenticated
-using ((select auth.uid()) = id);
+using (id = (select auth.uid()));
 
-drop policy if exists "Users can update own profile" on public.users;
-create policy "Users can update own profile"
-on public.users
+create policy "Accounts can update own password flag"
+on public.accounts
 for update
 to authenticated
-using ((select auth.uid()) = id)
-with check ((select auth.uid()) = id);
+using (id = (select auth.uid()))
+with check (id = (select auth.uid()));
+
+create policy "Patients can insert own profile"
+on public.patients
+for insert
+to authenticated
+with check (account_id = (select auth.uid()));
+
+create policy "Patients can read own profile"
+on public.patients
+for select
+to authenticated
+using (account_id = (select auth.uid()));
+
+create policy "Patients can update own profile"
+on public.patients
+for update
+to authenticated
+using (account_id = (select auth.uid()))
+with check (account_id = (select auth.uid()));
+
+create policy "Doctors can read related patients"
+on public.patients
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.doctors
+    join public.appointments on public.appointments.doctor_id = public.doctors.id
+    where public.doctors.account_id = (select auth.uid())
+      and public.appointments.patient_id = public.patients.id
+  )
+);
+
+drop policy if exists "Doctors can read own profile row" on public.doctors;
+create policy "Doctors can read own profile row"
+on public.doctors
+for select
+to authenticated
+using (account_id = (select auth.uid()));
+
+drop policy if exists "Doctors are publicly readable" on public.doctors;
+create policy "Doctors are publicly readable"
+on public.doctors
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "Doctors can update own profile row" on public.doctors;
+create policy "Doctors can update own profile row"
+on public.doctors
+for update
+to authenticated
+using (account_id = (select auth.uid()))
+with check (account_id = (select auth.uid()));
+
+drop policy if exists "Doctors can manage own appointments" on public.appointments;
+create policy "Doctors can manage own appointments"
+on public.appointments
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.doctors
+    where public.doctors.id = public.appointments.doctor_id
+      and public.doctors.account_id = (select auth.uid())
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.doctors
+    where public.doctors.id = public.appointments.doctor_id
+      and public.doctors.account_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Users can manage own appointments" on public.appointments;
+create policy "Users can manage own appointments"
+on public.appointments
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.patients
+    where public.patients.id = public.appointments.patient_id
+      and public.patients.account_id = (select auth.uid())
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.patients
+    where public.patients.id = public.appointments.patient_id
+      and public.patients.account_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Doctors can manage own schedule slots" on public.doctor_schedule_slots;
+create policy "Doctors can manage own schedule slots"
+on public.doctor_schedule_slots
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.doctors
+    where public.doctors.id = public.doctor_schedule_slots.doctor_id
+      and public.doctors.account_id = (select auth.uid())
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.doctors
+    where public.doctors.id = public.doctor_schedule_slots.doctor_id
+      and public.doctors.account_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Doctors can manage own notes" on public.doctor_notes;
+create policy "Doctors can manage own notes"
+on public.doctor_notes
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.doctors
+    where public.doctors.id = public.doctor_notes.doctor_id
+      and public.doctors.account_id = (select auth.uid())
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.doctors
+    where public.doctors.id = public.doctor_notes.doctor_id
+      and public.doctors.account_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Accounts can manage own notifications" on public.notifications;
+create policy "Accounts can manage own notifications"
+on public.notifications
+for all
+to authenticated
+using (account_id = (select auth.uid()))
+with check (account_id = (select auth.uid()));
 
 create or replace function public.handle_new_auth_user()
 returns trigger
@@ -228,23 +454,26 @@ security definer
 set search_path = ''
 as $$
 begin
-  insert into public.users (id, email, full_name, phone, role)
+  insert into public.accounts (id, email, account_type)
+  values (new.id, coalesce(new.email, ''), 'patient')
+  on conflict (id) do update
+  set email = excluded.email;
+
+  insert into public.patients (id, account_id, full_name, phone)
   values (
     new.id,
-    coalesce(new.email, ''),
+    new.id,
     coalesce(
       nullif(new.raw_user_meta_data ->> 'full_name', ''),
       nullif(split_part(coalesce(new.email, ''), '@', 1), ''),
       'Nguoi dung'
     ),
-    nullif(new.raw_user_meta_data ->> 'phone', ''),
-    'patient'
+    nullif(new.raw_user_meta_data ->> 'phone', '')
   )
-  on conflict (id) do update
+  on conflict (account_id) do update
   set
-    email = excluded.email,
     full_name = excluded.full_name,
-    phone = coalesce(excluded.phone, public.users.phone);
+    phone = coalesce(excluded.phone, public.patients.phone);
 
   return new;
 end;

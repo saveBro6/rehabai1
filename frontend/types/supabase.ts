@@ -10,19 +10,28 @@ type TableDefinition<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
 export type Database = {
   public: {
     Tables: {
-      users: TableDefinition<{
+      accounts: TableDefinition<{
         id: string;
-        full_name: string;
         email: string;
+        password_hash: string | null;
+        account_type: "admin" | "doctor" | "patient";
+        must_change_password: boolean;
+        account_status: "active" | "inactive" | "locked";
+        created_at: string;
+      }>;
+      patients: TableDefinition<{
+        id: string;
+        account_id: string;
+        full_name: string;
         phone: string | null;
-        role: "patient" | "doctor" | "therapist" | "admin";
         date_of_birth: string | null;
         address: string | null;
         medical_condition: string | null;
-        created_at: string;
+        gender: "male" | "female" | "other" | null;
       }>;
       doctors: TableDefinition<{
         id: string;
+        account_id: string | null;
         full_name: string;
         specialty: string;
         avatar_url: string | null;
@@ -41,7 +50,41 @@ export type Database = {
         appointment_time: string;
         consultation_type: "online";
         symptoms_description: string | null;
-        status: "pending" | "confirmed" | "completed" | "cancelled";
+        status: "pending" | "confirmed" | "completed" | "cancelled" | "rejected";
+        payment_status: "unpaid" | "paid" | "refunded";
+        meeting_url: string | null;
+        cancel_reason: string | null;
+        reject_reason: string | null;
+        reschedule_note: string | null;
+        completed_at: string | null;
+        created_at: string;
+      }>;
+      doctor_schedule_slots: TableDefinition<{
+        id: string;
+        doctor_id: string;
+        slot_date: string;
+        start_time: string;
+        end_time: string;
+        status: "available" | "booked" | "blocked" | "cancelled";
+        created_at: string;
+        updated_at: string;
+      }>;
+      doctor_notes: TableDefinition<{
+        id: string;
+        doctor_id: string;
+        patient_id: string;
+        appointment_id: string | null;
+        note: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+      notifications: TableDefinition<{
+        id: string;
+        account_id: string;
+        title: string;
+        content: string;
+        type: string;
+        is_read: boolean;
         created_at: string;
       }>;
       products: TableDefinition<{

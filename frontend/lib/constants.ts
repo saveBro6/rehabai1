@@ -6,6 +6,7 @@ export const bodyRegions = ["Cánh tay", "Bàn tay", "Chân", "Vai", "Hông", "G
 
 export const mockUser: User = {
   id: MOCK_USER_ID,
+  account_id: MOCK_USER_ID,
   full_name: "Nguyen Van An",
   email: "an@example.com",
   phone: "0901000001",
