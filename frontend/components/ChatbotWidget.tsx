@@ -69,14 +69,22 @@ export function ChatbotWidget() {
     void send(input);
   }
 
+  if (!open) {
+    return (
+      <button
+        className="fixed bottom-4 right-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-emerald-500 text-white shadow-soft transition hover:bg-emerald-700"
+        onClick={() => setOpen(true)}
+        aria-label="Mở chatbot"
+      >
+        <MessageCircle className="h-6 w-6" />
+      </button>
+    );
+  }
+
   return (
       <div className="fixed bottom-4 right-4 z-30 flex flex-col items-end">
         <div
-          className={`mb-3 flex h-[560px] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft transition-all duration-300 ease-out origin-bottom-right ${
-            open 
-              ? "scale-100 opacity-100 pointer-events-auto" 
-              : "scale-75 opacity-0 pointer-events-none h-0 mb-0 border-none"
-          }`}
+          className="mb-3 flex h-[560px] w-[min(380px,calc(100vw-2rem))] origin-bottom-right flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft transition-all duration-300 ease-out"
         >
           <div className="flex items-center justify-between bg-emerald-500 px-4 py-3 text-white">
             <div className="flex items-center gap-2 font-semibold"><Bot className="h-5 w-5" /> RehabAI Assistant</div>
@@ -105,11 +113,9 @@ export function ChatbotWidget() {
         </div>
 
         <button 
-          className={`grid h-14 w-14 place-items-center rounded-full bg-emerald-500 text-white shadow-soft hover:bg-emerald-700 transition-all duration-200 ease-out origin-center ${
-            open ? "scale-0 opacity-0 pointer-events-none h-0 w-0" : "scale-100 opacity-100"
-          }`} 
-          onClick={() => setOpen(true)} 
-          aria-label="Mở chatbot"
+          className="grid h-14 w-14 origin-center scale-0 place-items-center rounded-full bg-emerald-500 text-white opacity-0 shadow-soft transition-all duration-200 ease-out hover:bg-emerald-700"
+          tabIndex={-1}
+          aria-hidden="true"
         >
           <MessageCircle className="h-6 w-6" />
         </button>

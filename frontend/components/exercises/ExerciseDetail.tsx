@@ -5,7 +5,6 @@ import { BookmarkPlus, CheckCircle2, Clock, Repeat } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { MedicalDisclaimer } from "@/components/MedicalDisclaimer";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscriptionAccess } from "@/hooks/useSubscriptionAccess";
 import { hasPlanAccess } from "@/lib/subscription-access";
@@ -49,7 +48,6 @@ export function ExerciseDetail({ exercise }: { exercise: Exercise }) {
           height={560}
           className="h-80 w-full rounded-lg object-cover"
         />
-        <div className="mt-6"><MedicalDisclaimer detail /></div>
         <h1 className="mt-6 text-3xl font-bold text-slate-950">{exercise.title}</h1>
         <p className="mt-3 text-slate-600">{exercise.description}</p>
         <div className="mt-6 grid gap-4 sm:grid-cols-3">

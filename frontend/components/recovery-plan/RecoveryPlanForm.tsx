@@ -8,7 +8,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { bodyRegions } from "@/lib/constants";
 import { useToast } from "@/hooks/useToast";
 import { createRecoveryPlan, generateRecoveryPlanExercises } from "@/services/recovery-plans.service";
-import type { ExerciseDifficulty } from "@/types";
+import type { Row } from "@/types/supabase";
+
+type RecoveryPlanDifficulty = Row<"recovery_plans">["preferred_difficulty"];
 
 export function RecoveryPlanForm() {
   const router = useRouter();
@@ -20,7 +22,7 @@ export function RecoveryPlanForm() {
     recovery_goal: "improve_mobility",
     affected_body_region: "arm",
     current_mobility_level: "moderate",
-    preferred_difficulty: "beginner" as ExerciseDifficulty,
+    preferred_difficulty: "beginner" as RecoveryPlanDifficulty,
     sessions_per_week: 3,
     notes: ""
   });
@@ -77,7 +79,7 @@ export function RecoveryPlanForm() {
           </select>
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-700">Do kho
-          <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.preferred_difficulty} onChange={(event) => setForm({ ...form, preferred_difficulty: event.target.value as ExerciseDifficulty })}>
+          <select className="rounded-lg border border-slate-300 px-3 py-2" value={form.preferred_difficulty} onChange={(event) => setForm({ ...form, preferred_difficulty: event.target.value as RecoveryPlanDifficulty })}>
             <option value="beginner">Beginner</option>
             <option value="intermediate">Intermediate</option>
             <option value="advanced">Advanced</option>

@@ -1,6 +1,12 @@
 import { assertNoSupabaseError, getSupabase } from "@/services/common";
 import type { Product } from "@/types";
 
+function uniqueSorted(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort((a, b) =>
+    a.localeCompare(b, "vi")
+  );
+}
+
 export async function getProducts(filters?: { category?: string; recommended?: boolean }) {
   const supabase = getSupabase();
   let query = supabase.from("products").select("*").order("created_at", { ascending: false });
@@ -11,6 +17,14 @@ export async function getProducts(filters?: { category?: string; recommended?: b
   const { data, error } = await query;
   assertNoSupabaseError(error);
   return (data || []) as Product[];
+}
+
+export async function getProductCategories() {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("products").select("category").order("category", { ascending: true });
+  assertNoSupabaseError(error);
+
+  return uniqueSorted((data || []).map((row) => row.category));
 }
 
 export async function getProductById(id: string) {

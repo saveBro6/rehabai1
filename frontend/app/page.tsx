@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -22,8 +23,11 @@ import { Card } from "@/components/Card";
 import { getProtectedHref } from "@/lib/auth-navigation";
 import { visiblePricingPlans } from "@/lib/subscription-access";
 import { formatCurrency } from "@/lib/utils";
-import { mockDoctors, mockExercises, mockSubscriptions } from "@/lib/constants";
 import { useAuth } from "@/hooks/useAuth";
+import { getDoctors } from "@/services/doctors.service";
+import { getExercises } from "@/services/exercises.service";
+import { getSubscriptions } from "@/services/subscriptions.service";
+import type { Doctor, Exercise, Subscription } from "@/types";
 
 const benefits = [
   { icon: ShieldCheck, title: "Giảm thời gian đi lại", text: "Theo dõi và tập luyện tại nhà với hướng dẫn rõ ràng hơn." },
@@ -49,11 +53,52 @@ const faq = [
 
 export default function LandingPage() {
   const { isAuthenticated } = useAuth();
+  const [featuredDoctors, setFeaturedDoctors] = useState<Doctor[]>([]);
+  const [featuredExercises, setFeaturedExercises] = useState<Exercise[]>([]);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<Subscription[]>([]);
+  const [loadingHighlights, setLoadingHighlights] = useState(true);
   const createPlanHref = getProtectedHref(isAuthenticated, "/recovery-plan/create");
   const appointmentHref = getProtectedHref(isAuthenticated, "/appointments");
   const pricingHref = getProtectedHref(isAuthenticated, "/pricing");
-  const cartHref = getProtectedHref(isAuthenticated, "/cart");
-  const profileHref = getProtectedHref(isAuthenticated, "/profile");
+  const pricingPlans = visiblePricingPlans(subscriptionPlans);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadHighlights() {
+      setLoadingHighlights(true);
+
+      try {
+        const [doctors, exercises, subscriptions] = await Promise.all([
+          getDoctors(),
+          getExercises({}),
+          getSubscriptions()
+        ]);
+
+        if (!mounted) return;
+
+        setFeaturedDoctors(doctors.slice(0, 3));
+        setFeaturedExercises(exercises.slice(0, 3));
+        setSubscriptionPlans(subscriptions);
+      } catch {
+        if (!mounted) return;
+
+        setFeaturedDoctors([]);
+        setFeaturedExercises([]);
+        setSubscriptionPlans([]);
+      } finally {
+        if (mounted) {
+          setLoadingHighlights(false);
+        }
+      }
+    }
+
+    void loadHighlights();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <div className="bg-white text-slate-800">
@@ -139,8 +184,10 @@ export default function LandingPage() {
           </div>
           <Link href="/doctors" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-900">Xem bác sĩ <ArrowRight className="h-4 w-4" /></Link>
         </div>
+        {loadingHighlights ? <p className="mt-8 text-slate-500">Đang tải danh sách bác sĩ...</p> : null}
+        {!loadingHighlights && !featuredDoctors.length ? <p className="mt-8 text-slate-500">Chưa có dữ liệu bác sĩ.</p> : null}
         <div className="mt-8 grid gap-5 md:grid-cols-3">
-          {mockDoctors.map((doctor) => (
+          {featuredDoctors.map((doctor) => (
             <Card key={doctor.id} className="border-emerald-100 transition hover:-translate-y-1 hover:shadow-md">
               <Image
                 src={doctor.avatar_url || "/images/placeholders/rehab-equipment.jpg"}
@@ -171,8 +218,10 @@ export default function LandingPage() {
             </div>
             <Link href="/exercises" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-900">Khám phá thư viện bài tập <ArrowRight className="h-4 w-4" /></Link>
           </div>
+          {loadingHighlights ? <p className="mt-8 text-slate-500">Đang tải bài tập...</p> : null}
+          {!loadingHighlights && !featuredExercises.length ? <p className="mt-8 text-slate-500">Chưa có dữ liệu bài tập.</p> : null}
           <div className="mt-8 grid gap-5 md:grid-cols-3">
-            {mockExercises.slice(0, 3).map((exercise) => (
+            {featuredExercises.map((exercise) => (
               <Card key={exercise.id} className="border-emerald-100">
                 <Image
                   src={exercise.image_url || "/images/placeholders/rehab-equipment.jpg"}
@@ -196,8 +245,10 @@ export default function LandingPage() {
       <section className="mx-auto max-w-7xl px-4 py-16">
         <p className="text-sm font-bold uppercase text-emerald-700">Bảng giá</p>
         <h2 className="mt-2 text-3xl font-bold text-slate-950">Chọn gói đồng hành phù hợp</h2>
+        {loadingHighlights ? <p className="mt-8 text-slate-500">Đang tải bảng giá...</p> : null}
+        {!loadingHighlights && !pricingPlans.length ? <p className="mt-8 text-slate-500">Chưa có dữ liệu bảng giá.</p> : null}
         <div className="mt-8 grid gap-5 md:grid-cols-3">
-          {visiblePricingPlans(mockSubscriptions).map((plan) => (
+          {pricingPlans.map((plan) => (
             <Card key={plan.id} className={plan.name === "Standard" ? "border-emerald-400 shadow-md" : "border-emerald-100"}>
               <p className="text-sm font-semibold text-emerald-700">{plan.name}</p>
               <p className="mt-3 text-3xl font-bold text-slate-950">{formatCurrency(plan.price)}</p>

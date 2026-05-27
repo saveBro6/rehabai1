@@ -2,38 +2,6 @@ import type { Doctor, Exercise, ExerciseLog, Product, RecoveryPlan, RecoveryPlan
 
 export const MOCK_USER_ID = "11111111-1111-4111-8111-111111111111";
 
-export const specialties = [
-  "Phục hồi chức năng",
-  "Thần kinh",
-  "Vật lý trị liệu",
-  "Cơ xương khớp",
-  "Dinh dưỡng phục hồi"
-];
-
-export const productCategories = [
-  "Dụng cụ tập tay",
-  "Dụng cụ tập chân",
-  "Khung tập đi",
-  "Bóng tập phục hồi",
-  "Dây kháng lực",
-  "Ghế hỗ trợ",
-  "Thiết bị theo dõi sức khỏe"
-];
-
-export const exerciseCategories = [
-  "Phục hồi sau đột quỵ",
-  "Chi trên",
-  "Chi dưới",
-  "Tập thăng bằng",
-  "Vận động",
-  "Phối hợp động tác",
-  "Sức mạnh",
-  "Linh hoạt",
-  "Phục hồi chấn thương"
-];
-
-export const exerciseDifficulties = ["Cơ bản", "Trung cấp", "Nâng cao"];
-
 export const bodyRegions = ["Cánh tay", "Bàn tay", "Chân", "Vai", "Hông", "Gối", "Cổ chân", "Cơ lõi", "Toàn thân"];
 
 export const mockUser: User = {

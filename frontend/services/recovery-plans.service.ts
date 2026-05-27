@@ -2,8 +2,9 @@ import { assertNoSupabaseError, getSupabase } from "@/services/common";
 import { getExercises } from "@/services/exercises.service";
 import { selectExercisesForPlan } from "@/services/recovery-plan-generator";
 import type { RecoveryPlan, RecoveryPlanExercise } from "@/types";
+import type { Insert, Update } from "@/types/supabase";
 
-type RecoveryPlanCreate = Omit<RecoveryPlan, "id" | "created_at" | "exercises">;
+type RecoveryPlanCreate = Insert<"recovery_plans">;
 
 function sortPlanExercises(rows: RecoveryPlanExercise[]) {
   return [...rows].sort((a, b) => a.week_number - b.week_number || a.day_number - b.day_number || a.order_index - b.order_index);
@@ -48,7 +49,7 @@ export async function createRecoveryPlan(payload: RecoveryPlanCreate) {
   return { ...(data as RecoveryPlan), exercises: [] };
 }
 
-export async function updateRecoveryPlan(planId: string, payload: Partial<RecoveryPlanCreate>) {
+export async function updateRecoveryPlan(planId: string, payload: Update<"recovery_plans">) {
   const supabase = getSupabase();
   const { data, error } = await supabase.from("recovery_plans").update(payload).eq("id", planId).select("*").single();
   assertNoSupabaseError(error);

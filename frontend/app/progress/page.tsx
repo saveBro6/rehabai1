@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Card } from "@/components/Card";
-import { MedicalDisclaimer } from "@/components/MedicalDisclaimer";
 import { RequireSubscription } from "@/components/auth/RequireSubscription";
 import { ExerciseLogForm } from "@/components/progress/ExerciseLogForm";
 import { ProgressCharts } from "@/components/progress/ProgressCharts";
@@ -33,7 +32,6 @@ function ProgressContent() {
     <section className="mx-auto max-w-7xl px-4 py-10">
       <p className="text-sm font-bold uppercase text-emerald-700">Progress</p>
       <h1 className="mt-2 text-3xl font-bold text-slate-950">Theo dõi tiến trình phục hồi</h1>
-      <div className="mt-6"><MedicalDisclaimer /></div>
       <div className="mt-8"><ProgressSummaryCards progress={progress} /></div>
       <div className="mt-8"><ProgressCharts progress={progress} /></div>
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_420px]">

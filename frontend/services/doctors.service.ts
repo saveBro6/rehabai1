@@ -14,6 +14,14 @@ export async function getDoctors(filters?: { specialty?: string }) {
   return (data || []) as Doctor[];
 }
 
+export async function getDoctorSpecialties() {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("doctors").select("specialty").order("specialty", { ascending: true });
+  assertNoSupabaseError(error);
+
+  return Array.from(new Set((data || []).map((row) => row.specialty).filter(Boolean)));
+}
+
 export async function getDoctorById(id: string) {
   const supabase = getSupabase();
   const { data, error } = await supabase.from("doctors").select("*").eq("id", id).maybeSingle();

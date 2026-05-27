@@ -45,3 +45,129 @@ values
   ('f1111111-1111-4111-8111-111111111119', 'Gập duỗi gối', 'gap-duoi-goi', 'Hỗ trợ tầm vận động khớp gối sau chấn thương hoặc phẫu thuật.', 'Phục hồi chấn thương', 'Cơ bản', 'Gối', 8, 10, 2, array['Ngồi hoặc nằm với chân duỗi thoải mái.', 'Gập gối chậm rãi trong mức không đau.', 'Duỗi chân về vị trí ban đầu.'], array['Tuân thủ giới hạn vận động nếu mới phẫu thuật.'], '/images/exercises/knee-flexion-extension.jpg', true),
   ('f1111111-1111-4111-8111-111111111120', 'Tập phối hợp tay mắt', 'tap-phoi-hop-tay-mat', 'Rèn khả năng điều khiển động tác và phối hợp sau đột quỵ.', 'Phối hợp động tác', 'Trung cấp', 'Cánh tay', 10, 12, 3, array['Đặt các vật nhỏ trên bàn.', 'Chạm lần lượt từng vật bằng ngón trỏ.', 'Tăng tốc độ khi kiểm soát tốt hơn.'], array['Bắt đầu chậm, ưu tiên chính xác hơn tốc độ.'], '/images/exercises/hand-eye-coordination.jpg', true)
 on conflict (slug) do update set title = excluded.title, description = excluded.description, category = excluded.category, difficulty = excluded.difficulty, body_region = excluded.body_region, instructions = excluded.instructions, precautions = excluded.precautions;
+
+with test_accounts as (
+  select *
+  from (
+    values
+      ('10000000-0000-4000-8000-000000000001'::uuid, 'patient@test.com', 'Test Patient', 'patient'),
+      ('10000000-0000-4000-8000-000000000002'::uuid, 'admin@test.com', 'Test Admin', 'admin'),
+      ('10000000-0000-4000-8000-000000000003'::uuid, 'doctor@test.com', 'Test Doctor', 'doctor')
+  ) as accounts(id, email, full_name, role)
+),
+resolved_accounts as (
+  select
+    coalesce(existing.id, test_accounts.id) as id,
+    test_accounts.email,
+    test_accounts.full_name,
+    test_accounts.role
+  from test_accounts
+  left join auth.users as existing on lower(existing.email) = lower(test_accounts.email)
+),
+updated_auth_users as (
+  update auth.users
+  set
+    encrypted_password = crypt('1111', gen_salt('bf')),
+    email_confirmed_at = coalesce(email_confirmed_at, now()),
+    confirmation_token = '',
+    recovery_token = '',
+    email_change_token_new = '',
+    email_change = '',
+    email_change_token_current = '',
+    reauthentication_token = '',
+    raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email']),
+    raw_user_meta_data = jsonb_build_object('full_name', resolved_accounts.full_name),
+    updated_at = now()
+  from resolved_accounts
+  where auth.users.id = resolved_accounts.id
+  returning auth.users.id
+),
+inserted_auth_users as (
+  insert into auth.users (
+    instance_id,
+    id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    confirmation_token,
+    recovery_token,
+    email_change_token_new,
+    email_change,
+    email_change_token_current,
+    reauthentication_token,
+    raw_app_meta_data,
+    raw_user_meta_data,
+    created_at,
+    updated_at,
+    is_sso_user,
+    is_anonymous
+  )
+  select
+    '00000000-0000-0000-0000-000000000000',
+    resolved_accounts.id,
+    'authenticated',
+    'authenticated',
+    resolved_accounts.email,
+    crypt('1111', gen_salt('bf')),
+    now(),
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    jsonb_build_object('full_name', resolved_accounts.full_name),
+    now(),
+    now(),
+    false,
+    false
+  from resolved_accounts
+  where not exists (
+    select 1
+    from updated_auth_users
+    where updated_auth_users.id = resolved_accounts.id
+  )
+  returning id
+)
+insert into auth.identities (
+  id,
+  provider_id,
+  user_id,
+  identity_data,
+  provider,
+  last_sign_in_at,
+  created_at,
+  updated_at
+)
+select
+  resolved_accounts.id,
+  resolved_accounts.id::text,
+  resolved_accounts.id,
+  jsonb_build_object(
+    'sub', resolved_accounts.id::text,
+    'email', resolved_accounts.email,
+    'email_verified', true,
+    'phone_verified', false
+  ),
+  'email',
+  now(),
+  now(),
+  now()
+from resolved_accounts
+on conflict (provider_id, provider) do update
+set
+  identity_data = excluded.identity_data,
+  updated_at = now();
+
+insert into public.users (id, full_name, email, role)
+values
+  ('10000000-0000-4000-8000-000000000001', 'Test Patient', 'patient@test.com', 'patient'),
+  ('10000000-0000-4000-8000-000000000002', 'Test Admin', 'admin@test.com', 'admin'),
+  ('10000000-0000-4000-8000-000000000003', 'Test Doctor', 'doctor@test.com', 'doctor')
+on conflict (email) do update
+set
+  full_name = excluded.full_name,
+  role = excluded.role;

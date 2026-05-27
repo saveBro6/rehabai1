@@ -3,30 +3,36 @@
 import { useEffect, useState } from "react";
 
 import { DoctorCard } from "@/components/DoctorCard";
-import { specialties } from "@/lib/constants";
 import { useAuth } from "@/hooks/useAuth";
-import { getDoctors } from "@/services/doctors.service";
+import { getDoctorSpecialties, getDoctors } from "@/services/doctors.service";
 import type { Doctor } from "@/types";
 
 export default function DoctorsPage() {
   const { isAuthenticated } = useAuth();
   const [specialty, setSpecialty] = useState("");
+  const [specialties, setSpecialties] = useState<string[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    void getDoctorSpecialties()
+      .then(setSpecialties)
+      .catch(() => setSpecialties([]));
+  }, []);
+
+  useEffect(() => {
     setLoading(true);
-    void getDoctors({ specialty: specialty || undefined }).then((data) => {
-      setDoctors(data);
-      setLoading(false);
-    });
+    void getDoctors({ specialty: specialty || undefined })
+      .then(setDoctors)
+      .catch(() => setDoctors([]))
+      .finally(() => setLoading(false));
   }, [specialty]);
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-sm font-bold uppercase text-emerald-700">Chuyên gia</p><h1 className="text-3xl font-bold text-slate-950">Kết nối với bác sĩ chuyên khoa</h1></div>
-        <select className="rounded-lg border border-slate-300 px-3 py-2" value={specialty} onChange={(event) => setSpecialty(event.target.value)}>
+        <select aria-label="Chuyên khoa" className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2" value={specialty} onChange={(event) => setSpecialty(event.target.value)}>
           <option value="">Tất cả chuyên khoa</option>
           {specialties.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
