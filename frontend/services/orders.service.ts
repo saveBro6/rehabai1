@@ -84,7 +84,7 @@ export async function getOrders(userId: string) {
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   assertNoSupabaseError(error);
-  return (data || []) as OrderWithItems[];
+  return (data || []) as unknown as OrderWithItems[];
 }
 
 export async function getOrderById(orderId: string, userId: string) {
@@ -96,5 +96,5 @@ export async function getOrderById(orderId: string, userId: string) {
     .eq("user_id", userId)
     .maybeSingle();
   assertNoSupabaseError(error);
-  return data as OrderWithItems | null;
+  return data as unknown as OrderWithItems | null;
 }

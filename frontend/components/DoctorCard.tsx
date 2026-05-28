@@ -4,13 +4,11 @@ import { Star } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { FallbackImage } from "@/components/FallbackImage";
-import { getProtectedHref } from "@/lib/auth-navigation";
 import { formatCurrency } from "@/lib/utils";
 import type { Doctor } from "@/types";
 
-export function DoctorCard({ doctor, isAuthenticated = false }: { doctor: Doctor; isAuthenticated?: boolean }) {
-  const detailHref = getProtectedHref(isAuthenticated, `/doctors/${doctor.id}`);
-  const appointmentHref = getProtectedHref(isAuthenticated, "/appointments");
+export function DoctorCard({ doctor }: { doctor: Doctor; isAuthenticated?: boolean }) {
+  const detailHref = `/doctors/${doctor.id}`;
 
   return (
     <Card className="flex h-full flex-col overflow-hidden p-0">

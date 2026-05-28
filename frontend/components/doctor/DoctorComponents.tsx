@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes, useMemo, useState } from "react";
+import { FormEvent, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes, useEffect, useMemo, useState } from "react";
 import { CalendarPlus, Check, Eye, RotateCcw, X } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { ImagePreview, normalizeImagePreviewSrc } from "@/components/ImagePreview";
 import { addMinutesToTime } from "@/services/doctor-schedules.service";
 import type {
   AppointmentStatus,
@@ -217,7 +218,14 @@ export function DoctorProfileForm({
   onAvatarUpload?: (file: File) => Promise<string>;
 }) {
   const [draft, setDraft] = useState(doctor);
+  const [avatarSourceMode, setAvatarSourceMode] = useState<"url" | "upload">("url");
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const avatarPreviewSrc = normalizeImagePreviewSrc(draft.avatar_url);
+
+  useEffect(() => {
+    setDraft(doctor);
+  }, [doctor]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -234,28 +242,106 @@ export function DoctorProfileForm({
   return (
     <Card>
       <form onSubmit={submit} className="grid gap-4">
-        <label className="grid gap-1.5">
-          <span className="text-sm font-semibold text-slate-700">Upload ảnh đại diện</span>
-          <input
-            accept="image/*"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            disabled={!onAvatarUpload || uploading}
-            type="file"
-            onChange={async (event) => {
-              const file = event.target.files?.[0];
-              if (!file || !onAvatarUpload) return;
-              setUploading(true);
-              try {
-                const avatarUrl = await onAvatarUpload(file);
-                setDraft({ ...draft, avatar_url: avatarUrl });
-              } finally {
-                setUploading(false);
-              }
-            }}
-          />
-          {uploading ? <span className="text-xs font-semibold text-emerald-700">Đang upload ảnh...</span> : null}
-        </label>
-        <DoctorInput label="Ảnh đại diện" value={draft.avatar_url || ""} onChange={(value) => setDraft({ ...draft, avatar_url: value })} placeholder="URL ảnh hoặc đường dẫn storage" />
+        <div className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-[160px_1fr]">
+          <div>
+            <ImagePreview
+              src={avatarPreviewSrc}
+              alt={`Ảnh đại diện ${draft.full_name}`}
+              className="aspect-square w-full rounded-lg object-cover"
+            />
+          </div>
+          <div className="grid content-start gap-3">
+            <p className="text-sm text-slate-600">
+              Chọn một cách cập nhật ảnh đại diện: nhập link ảnh hoặc tải ảnh lên.
+            </p>
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-white p-1">
+              <Button
+                type="button"
+                variant={avatarSourceMode === "url" ? "primary" : "ghost"}
+                onClick={() => {
+                  setAvatarSourceMode("url");
+                  setUploadError("");
+                }}
+              >
+                Dùng link ảnh
+              </Button>
+              <Button
+                type="button"
+                variant={avatarSourceMode === "upload" ? "primary" : "ghost"}
+                onClick={() => {
+                  setAvatarSourceMode("upload");
+                  setUploadError("");
+                }}
+              >
+                Tải ảnh lên
+              </Button>
+            </div>
+
+            {avatarSourceMode === "url" ? (
+              <DoctorInput
+                label="Đường dẫn ảnh đại diện"
+                value={draft.avatar_url || ""}
+                onChange={(value) => setDraft({ ...draft, avatar_url: value })}
+                placeholder="URL ảnh hoặc đường dẫn, ví dụ /doctors/avatar.jpg"
+              />
+            ) : (
+              <div className="grid gap-3">
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-semibold text-slate-700">Upload ảnh đại diện</span>
+                  <input
+                    accept="image/*"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    disabled={!onAvatarUpload || uploading}
+                    type="file"
+                    onChange={async (event) => {
+                      const input = event.currentTarget;
+                      const file = input.files?.[0];
+                      if (!file || !onAvatarUpload) return;
+                      setUploading(true);
+                      setUploadError("");
+                      try {
+                        const avatarUrl = await onAvatarUpload(file);
+                        setDraft((current) => ({ ...current, avatar_url: avatarUrl }));
+                      } catch {
+                        setUploadError("Không thể tải ảnh đại diện lên. Vui lòng kiểm tra cấu hình lưu trữ.");
+                      } finally {
+                        setUploading(false);
+                        if (input) input.value = "";
+                      }
+                    }}
+                  />
+                  {uploading ? <span className="text-xs font-semibold text-emerald-700">Đang upload ảnh...</span> : null}
+                  {uploadError ? <span className="text-xs font-semibold text-rose-700">{uploadError}</span> : null}
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="text-sm font-semibold text-slate-700">Link ảnh đã tải lên</span>
+                  <input
+                    className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                    readOnly
+                    value={draft.avatar_url || ""}
+                    placeholder="Chưa tải ảnh lên"
+                    onFocus={(event) => event.currentTarget.select()}
+                  />
+                </label>
+              </div>
+            )}
+
+            <label className="grid gap-1.5">
+              <span className="text-sm font-semibold text-slate-700">Link ảnh hiện tại</span>
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                readOnly
+                value={avatarPreviewSrc}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+            </label>
+            {draft.avatar_url ? (
+              <a className="w-fit text-sm font-semibold text-emerald-700 hover:text-emerald-800" href={avatarPreviewSrc} rel="noreferrer" target="_blank">
+                Mở ảnh trong tab mới
+              </a>
+            ) : null}
+          </div>
+        </div>
         <DoctorInput label="Họ tên" value={draft.full_name} onChange={(value) => setDraft({ ...draft, full_name: value })} required />
         <DoctorInput label="Chuyên khoa" value={draft.specialty} onChange={(value) => setDraft({ ...draft, specialty: value })} required />
         <DoctorTextarea label="Bio" value={draft.bio || ""} onChange={(value) => setDraft({ ...draft, bio: value })} />

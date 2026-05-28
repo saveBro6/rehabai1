@@ -22,8 +22,7 @@ create table if not exists public.patients (
 );
 
 create table if not exists public.doctors (
-  id uuid primary key default gen_random_uuid(),
-  account_id uuid unique references public.accounts(id) on delete set null,
+  id uuid primary key references public.accounts(id) on delete cascade,
   full_name text not null,
   specialty text not null,
   avatar_url text,
@@ -32,6 +31,11 @@ create table if not exists public.doctors (
   rating numeric(2,1) not null default 5.0 check (rating >= 0 and rating <= 5),
   consultation_fee numeric(12,2) not null default 0 check (consultation_fee >= 0),
   available_online boolean not null default true,
+  public_profile_status text not null default 'draft' check (public_profile_status in ('draft', 'submitted', 'approved', 'rejected')),
+  public_profile_submitted_at timestamptz,
+  public_profile_reviewed_at timestamptz,
+  public_profile_rejection_reason text,
+  public_profile_reviewed_by uuid references public.accounts(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -213,7 +217,8 @@ create table if not exists public.exercise_logs (
 );
 
 create index if not exists idx_doctors_specialty on public.doctors (specialty);
-create index if not exists idx_doctors_account on public.doctors (account_id);
+create index if not exists idx_doctors_public_profile_status on public.doctors (public_profile_status);
+create index if not exists idx_doctors_public_profile_submitted_at on public.doctors (public_profile_submitted_at desc);
 create index if not exists idx_appointments_patient on public.appointments (patient_id);
 create index if not exists idx_appointments_doctor on public.appointments (doctor_id);
 create index if not exists idx_appointments_doctor_date_status on public.appointments (doctor_id, appointment_date, status);
@@ -326,7 +331,7 @@ using (
     select 1
     from public.doctors
     join public.appointments on public.appointments.doctor_id = public.doctors.id
-    where public.doctors.account_id = (select auth.uid())
+    where public.doctors.id = (select auth.uid())
       and public.appointments.patient_id = public.patients.id
   )
 );
@@ -336,22 +341,75 @@ create policy "Doctors can read own profile row"
 on public.doctors
 for select
 to authenticated
-using (account_id = (select auth.uid()));
+using (id = (select auth.uid()));
+
+create or replace function public.is_active_doctor_account(p_account_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.accounts
+    where id = p_account_id
+      and account_type = 'doctor'
+      and account_status = 'active'
+  );
+$$;
+
+create or replace function public.is_public_approved_doctor(p_account_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.doctors
+    join public.accounts on public.accounts.id = public.doctors.id
+    where public.doctors.id = p_account_id
+      and public.doctors.public_profile_status = 'approved'
+      and public.accounts.account_type = 'doctor'
+      and public.accounts.account_status = 'active'
+  );
+$$;
+
+revoke all on function public.is_active_doctor_account(uuid) from public, anon, authenticated;
+revoke all on function public.is_public_approved_doctor(uuid) from public, anon, authenticated;
+grant execute on function public.is_active_doctor_account(uuid) to anon, authenticated;
+grant execute on function public.is_public_approved_doctor(uuid) to anon, authenticated;
+
+grant select on public.doctors to anon, authenticated;
+grant select (id, account_type, account_status) on public.accounts to anon, authenticated;
 
 drop policy if exists "Doctors are publicly readable" on public.doctors;
-create policy "Doctors are publicly readable"
+drop policy if exists "Approved active doctors are publicly readable" on public.doctors;
+create policy "Approved active doctors are publicly readable"
 on public.doctors
 for select
 to anon, authenticated
-using (true);
+using (
+  public_profile_status = 'approved'
+  and public.is_active_doctor_account(id)
+);
+
+drop policy if exists "Public can read active doctor accounts" on public.accounts;
+create policy "Public can read active doctor accounts"
+on public.accounts
+for select
+to anon, authenticated
+using (public.is_public_approved_doctor(id));
 
 drop policy if exists "Doctors can update own profile row" on public.doctors;
 create policy "Doctors can update own profile row"
 on public.doctors
 for update
 to authenticated
-using (account_id = (select auth.uid()))
-with check (account_id = (select auth.uid()));
+using (id = (select auth.uid()))
+with check (id = (select auth.uid()));
 
 drop policy if exists "Products are publicly readable" on public.products;
 create policy "Products are publicly readable"
@@ -391,7 +449,7 @@ using (
     select 1
     from public.doctors
     where public.doctors.id = public.appointments.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 )
 with check (
@@ -399,7 +457,7 @@ with check (
     select 1
     from public.doctors
     where public.doctors.id = public.appointments.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 );
 
@@ -435,7 +493,7 @@ using (
     select 1
     from public.doctors
     where public.doctors.id = public.doctor_schedule_slots.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 )
 with check (
@@ -443,7 +501,7 @@ with check (
     select 1
     from public.doctors
     where public.doctors.id = public.doctor_schedule_slots.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 );
 
@@ -457,7 +515,7 @@ using (
     select 1
     from public.doctors
     where public.doctors.id = public.doctor_notes.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 )
 with check (
@@ -465,7 +523,7 @@ with check (
     select 1
     from public.doctors
     where public.doctors.id = public.doctor_notes.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 );
 
