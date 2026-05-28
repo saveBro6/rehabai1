@@ -1,12 +1,14 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bot, MessageCircle, Send, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 import { Button } from "@/components/Button";
 import { useAuth } from "@/hooks/useAuth";
-import { getChatbotReply } from "@/services/chatbot.service";
+import { getAuthRedirectPath } from "@/lib/auth-navigation";
 import { clsx } from "@/lib/utils";
 
 interface Message {
@@ -16,6 +18,7 @@ interface Message {
 
 function MessageContent({ message }: { message: Message }) {
   if (message.role === "user") return <>{message.content}</>;
+  if (!message.content) return <span className="text-slate-500">Đang trả lời...</span>;
 
   return (
     <ReactMarkdown
@@ -43,7 +46,8 @@ const prompts = [
 ];
 
 export function ChatbotWidget() {
-  const { user } = useAuth();
+  const pathname = usePathname();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -55,13 +59,51 @@ export function ChatbotWidget() {
   ]);
 
   async function send(message: string) {
-    if (!message.trim()) return;
-    setMessages((current) => [...current, { role: "user", content: message }]);
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage || loading || isAuthLoading || !isAuthenticated) return;
+
+    const nextMessages: Message[] = [...messages, { role: "user", content: trimmedMessage }];
+    setMessages([...nextMessages, { role: "assistant", content: "" }]);
     setInput("");
     setLoading(true);
-    const reply = await getChatbotReply(message, user?.id);
-    setMessages((current) => [...current, { role: "assistant", content: reply }]);
-    setLoading(false);
+
+    try {
+      const response = await fetch("/api/chatbot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: nextMessages })
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(await response.text());
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let reply = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        reply += decoder.decode(value, { stream: true });
+        setMessages([...nextMessages, { role: "assistant", content: reply }]);
+      }
+
+      reply += decoder.decode();
+      setMessages([...nextMessages, { role: "assistant", content: reply }]);
+    } catch (error) {
+      console.error("Chatbot request failed", error);
+      setMessages([
+        ...nextMessages,
+        {
+          role: "assistant",
+          content: "Xin lỗi, hiện tại RehabAI Assistant không khả dụng. Vui lòng thử lại sau."
+        }
+      ]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function submit(event: FormEvent) {
@@ -81,6 +123,8 @@ export function ChatbotWidget() {
     );
   }
 
+  const loginHref = getAuthRedirectPath(pathname || "/");
+
   return (
       <div className="fixed bottom-4 right-4 z-30 flex flex-col items-end">
         <div
@@ -88,28 +132,47 @@ export function ChatbotWidget() {
         >
           <div className="flex items-center justify-between bg-emerald-500 px-4 py-3 text-white">
             <div className="flex items-center gap-2 font-semibold"><Bot className="h-5 w-5" /> RehabAI Assistant</div>
-            <button onClick={() => setOpen(false)} aria-label="Dong chat"><X className="h-5 w-5" /></button>
+            <button onClick={() => setOpen(false)} aria-label="Đóng chat"><X className="h-5 w-5" /></button>
           </div>
           <div className="border-b border-slate-100 bg-emerald-50 px-4 py-3 text-xs text-slate-600">
             Thông tin từ Chatbot chỉ mang tính chất hỗ trợ và tham khảo. Không thay thế tư vấn của bác sĩ chuyên khoa. Với dấu hiệu nghiêm trọng, hoặc cơ sở y tế gần nhất!
           </div>
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.map((message, index) => (
-              <div key={`${message.role}-${index}`} className={clsx("rounded-lg px-3 py-2 text-sm", message.role === "user" ? "ml-8 bg-emerald-500 text-white" : "mr-8 bg-slate-100 text-slate-700")}>
-                <MessageContent message={message} />
+          {isAuthLoading || !isAuthenticated ? (
+            <div className="grid flex-1 content-center gap-4 p-6 text-center">
+              <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-50 text-emerald-700">
+                <Bot className="h-6 w-6" />
               </div>
-            ))}
-            {loading ? <div className="mr-8 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-500">Đang trả lời...</div> : null}
-          </div>
-          <div className="grid gap-2 border-t border-slate-100 p-3">
-            <div className="flex gap-2 overflow-x-auto">
-              {prompts.map((prompt) => <button key={prompt} className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700" onClick={() => void send(prompt)}>{prompt}</button>)}
+              <div>
+                <p className="font-semibold text-slate-900">Vui lòng đăng nhập để sử dụng RehabAI Assistant.</p>
+                <p className="mt-2 text-sm text-slate-600">Chatbot chỉ mở cho người dùng đã đăng ký hoặc đăng nhập.</p>
+              </div>
+              <Link
+                href={loginHref}
+                className="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                Đăng nhập
+              </Link>
             </div>
-            <form onSubmit={submit} className="flex gap-2">
-              <input className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Nhập câu hỏi..." />
-              <Button aria-label="Gui"><Send className="h-4 w-4" /></Button>
-            </form>
-          </div>
+          ) : (
+            <>
+              <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                {messages.map((message, index) => (
+                  <div key={`${message.role}-${index}`} className={clsx("rounded-lg px-3 py-2 text-sm", message.role === "user" ? "ml-8 bg-emerald-500 text-white" : "mr-8 bg-slate-100 text-slate-700")}>
+                    <MessageContent message={message} />
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-2 border-t border-slate-100 p-3">
+                <div className="flex gap-2 overflow-x-auto">
+                  {prompts.map((prompt) => <button key={prompt} className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => void send(prompt)} disabled={loading}>{prompt}</button>)}
+                </div>
+                <form onSubmit={submit} className="flex gap-2">
+                  <input className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Nhập câu hỏi..." disabled={loading} />
+                  <Button aria-label="Gửi" disabled={loading || !input.trim()}><Send className="h-4 w-4" /></Button>
+                </form>
+              </div>
+            </>
+          )}
         </div>
 
         <button 
