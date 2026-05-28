@@ -9,7 +9,7 @@ function uniqueSorted(values: Array<string | null | undefined>) {
 
 export async function getProducts(filters?: { category?: string; recommended?: boolean }) {
   const supabase = getSupabase();
-  let query = supabase.from("products").select("*").order("created_at", { ascending: false });
+  let query = supabase.from("products").select("*").eq("is_active", true).order("created_at", { ascending: false });
 
   if (filters?.category) query = query.eq("category", filters.category);
   if (filters?.recommended !== undefined) query = query.eq("is_recommended", filters.recommended);
@@ -21,7 +21,11 @@ export async function getProducts(filters?: { category?: string; recommended?: b
 
 export async function getProductCategories() {
   const supabase = getSupabase();
-  const { data, error } = await supabase.from("products").select("category").order("category", { ascending: true });
+  const { data, error } = await supabase
+    .from("products")
+    .select("category")
+    .eq("is_active", true)
+    .order("category", { ascending: true });
   assertNoSupabaseError(error);
 
   return uniqueSorted((data || []).map((row) => row.category));
@@ -29,7 +33,7 @@ export async function getProductCategories() {
 
 export async function getProductById(id: string) {
   const supabase = getSupabase();
-  const { data, error } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("products").select("*").eq("id", id).eq("is_active", true).maybeSingle();
   assertNoSupabaseError(error);
   return data as Product | null;
 }

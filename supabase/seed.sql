@@ -217,14 +217,14 @@ INSERT INTO "public"."patients" ("id", "full_name", "phone", "date_of_birth", "a
 -- Data for Name: products; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO "public"."products" ("id", "name", "description", "category", "price", "image_url", "stock_quantity", "is_recommended", "created_at") VALUES
-	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1', 'Bộ bóng mềm tập nắm tay', 'Dụng cụ tập lực nắm và vận động bàn tay cho người cần phục hồi sau đột quỵ.', 'Dụng cụ tập tay', 180000.00, 'products/hand-grip.jpg', 40, true, '2026-05-27 09:59:02.881857+00'),
-	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', 'Dây kéo kháng lực RehabAI', 'Dây kháng lực nhiều mức độ cho bài tập tay, vai và chân.', 'Dây kháng lực', 220000.00, 'products/resistance-band.jpg', 35, true, '2026-05-27 09:59:02.881857+00'),
-	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3', 'Khung tập đi gấp gọn', 'Hỗ trợ người bệnh tập đi an toàn trong quá trình tập luyện có giám sát.', 'Khung tập đi', 1250000.00, 'products/walker.jpg', 12, true, '2026-05-27 09:59:02.881857+00'),
-	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4', 'Bóng tập phục hồi 55cm', 'Bóng tập giúp cải thiện thăng bằng, sức mạnh thân mình và độ linh hoạt.', 'Bóng tập phục hồi', 360000.00, 'products/therapy-ball.jpg', 24, false, '2026-05-27 09:59:02.881857+00'),
-	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb5', 'Bàn đạp tập chân tại nhà', 'Dụng cụ tập chân nhỏ gọn cho người cần cải thiện tầm vận động.', 'Dụng cụ tập chân', 690000.00, 'products/pedal-trainer.jpg', 18, true, '2026-05-27 09:59:02.881857+00'),
-	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6', 'Ghế tắm hỗ trợ an toàn', 'Ghế chống trượt hỗ trợ sinh hoạt hằng ngày cho người cao tuổi và người yếu vận động.', 'Ghế hỗ trợ', 780000.00, 'products/shower-chair.jpg', 14, false, '2026-05-27 09:59:02.881857+00'),
-	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7', 'Máy đo huyết áp điện tử', 'Thiết bị theo dõi sức khỏe tại nhà, phù hợp với người cần quan sát chỉ số định kỳ.', 'Thiết bị theo dõi sức khỏe', 950000.00, 'products/blood-pressure-monitor.jpg', 30, true, '2026-05-27 09:59:02.881857+00') ON CONFLICT DO NOTHING;
+INSERT INTO "public"."products" ("id", "name", "description", "category", "price", "image_url", "stock_quantity", "is_recommended", "is_active", "created_at") VALUES
+	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1', 'Bộ bóng mềm tập nắm tay', 'Dụng cụ tập lực nắm và vận động bàn tay cho người cần phục hồi sau đột quỵ.', 'Dụng cụ tập tay', 180000.00, 'products/hand-grip.jpg', 40, true, true, '2026-05-27 09:59:02.881857+00'),
+	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', 'Dây kéo kháng lực RehabAI', 'Dây kháng lực nhiều mức độ cho bài tập tay, vai và chân.', 'Dây kháng lực', 220000.00, 'products/resistance-band.jpg', 35, true, true, '2026-05-27 09:59:02.881857+00'),
+	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3', 'Khung tập đi gấp gọn', 'Hỗ trợ người bệnh tập đi an toàn trong quá trình tập luyện có giám sát.', 'Khung tập đi', 1250000.00, 'products/walker.jpg', 12, true, true, '2026-05-27 09:59:02.881857+00'),
+	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4', 'Bóng tập phục hồi 55cm', 'Bóng tập giúp cải thiện thăng bằng, sức mạnh thân mình và độ linh hoạt.', 'Bóng tập phục hồi', 360000.00, 'products/therapy-ball.jpg', 24, false, true, '2026-05-27 09:59:02.881857+00'),
+	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb5', 'Bàn đạp tập chân tại nhà', 'Dụng cụ tập chân nhỏ gọn cho người cần cải thiện tầm vận động.', 'Dụng cụ tập chân', 690000.00, 'products/pedal-trainer.jpg', 18, true, true, '2026-05-27 09:59:02.881857+00'),
+	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6', 'Ghế tắm hỗ trợ an toàn', 'Ghế chống trượt hỗ trợ sinh hoạt hằng ngày cho người cao tuổi và người yếu vận động.', 'Ghế hỗ trợ', 780000.00, 'products/shower-chair.jpg', 14, false, true, '2026-05-27 09:59:02.881857+00'),
+	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7', 'Máy đo huyết áp điện tử', 'Thiết bị theo dõi sức khỏe tại nhà, phù hợp với người cần quan sát chỉ số định kỳ.', 'Thiết bị theo dõi sức khỏe', 950000.00, 'products/blood-pressure-monitor.jpg', 30, true, true, '2026-05-27 09:59:02.881857+00') ON CONFLICT DO NOTHING;
 
 
 --

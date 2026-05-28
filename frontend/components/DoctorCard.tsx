@@ -1,11 +1,11 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Star } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { FallbackImage } from "@/components/FallbackImage";
 import { getProtectedHref } from "@/lib/auth-navigation";
-import { formatCurrency, getImageUrl } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import type { Doctor } from "@/types";
 
 export function DoctorCard({ doctor, isAuthenticated = false }: { doctor: Doctor; isAuthenticated?: boolean }) {
@@ -14,8 +14,8 @@ export function DoctorCard({ doctor, isAuthenticated = false }: { doctor: Doctor
 
   return (
     <Card className="flex h-full flex-col overflow-hidden p-0">
-      <Image
-        src={getImageUrl(doctor.avatar_url)}
+      <FallbackImage
+        src={doctor.avatar_url}
         alt={doctor.full_name}
         width={800}
         height={520}

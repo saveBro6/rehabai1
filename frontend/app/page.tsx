@@ -20,6 +20,7 @@ import {
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { FallbackImage } from "@/components/FallbackImage";
 import { getProtectedHref } from "@/lib/auth-navigation";
 import { visiblePricingPlans } from "@/lib/subscription-access";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
@@ -115,6 +116,9 @@ export default function LandingPage() {
               <Link href="/exercises">
                 <Button className="bg-emerald-600 hover:bg-emerald-700">Xem bài tập</Button>
               </Link>
+              <Link href="/products">
+                <Button className="bg-emerald-600 hover:bg-emerald-700">Mua dụng cụ</Button>
+              </Link>
               <Link href={appointmentHref}>
                 <Button className="bg-emerald-600 hover:bg-emerald-700">Tư vấn với bác sĩ</Button>
               </Link>
@@ -164,12 +168,34 @@ export default function LandingPage() {
           <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-5">
             {services.map((item) => {
               const Icon = item.icon;
-              return (
-                <Card key={item.title} className="border-emerald-100">
+              const isProductService = Icon === ShoppingBag;
+              const card = (
+                <Card className="h-full border-emerald-100 transition hover:-translate-y-1 hover:shadow-md">
                   <Icon className="h-6 w-6 text-emerald-600" />
                   <h3 className="mt-4 font-bold text-slate-950">{item.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+                  {isProductService ? (
+                    <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                      Xem dụng cụ <ArrowRight className="h-4 w-4" />
+                    </span>
+                  ) : null}
                 </Card>
+              );
+
+              if (isProductService) {
+                return (
+                  <Link
+                    key={item.title}
+                    href="/products"
+                    className="block h-full rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  >
+                    {card}
+                  </Link>
+                );
+              }
+
+              return (
+                <div key={item.title}>{card}</div>
               );
             })}
           </div>
@@ -189,8 +215,8 @@ export default function LandingPage() {
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           {featuredDoctors.map((doctor) => (
             <Card key={doctor.id} className="border-emerald-100 transition hover:-translate-y-1 hover:shadow-md">
-              <Image
-                src={getImageUrl(doctor.avatar_url)}
+              <FallbackImage
+                src={doctor.avatar_url}
                 alt={doctor.full_name}
                 width={800}
                 height={520}

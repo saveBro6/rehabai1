@@ -16,7 +16,8 @@ export type DynamicSidebarProps = {
 
 export function DynamicSidebar({ open, onClose }: DynamicSidebarProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, profile } = useAuth();
+  const visibleSidebarItems = sidebarItems.filter((item) => !item.allowedRoles || item.allowedRoles.includes(profile?.role || ""));
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +75,7 @@ export function DynamicSidebar({ open, onClose }: DynamicSidebarProps) {
           </button>
         </div>
         <nav className="grid gap-1 overflow-y-auto px-3 py-4">
-          {sidebarItems.map((item) => (
+          {visibleSidebarItems.map((item) => (
             <SidebarNavItem key={item.href} item={item} isAuthenticated={isAuthenticated} onClick={onClose} />
           ))}
         </nav>

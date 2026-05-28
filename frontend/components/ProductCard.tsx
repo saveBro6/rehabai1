@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { ProductImage } from "@/components/ProductImage";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { getProtectedHref } from "@/lib/auth-navigation";
-import { formatCurrency, getImageUrl } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { addToCart as addCartItem } from "@/services/cart.service";
 import type { Product } from "@/types";
 
@@ -19,7 +19,7 @@ export function ProductCard({ product, isAuthenticated = false }: { product: Pro
   const router = useRouter();
   const { pushToast } = useToast();
   const [pendingAction, setPendingAction] = useState<"cart" | "buy" | null>(null);
-  const detailHref = getProtectedHref(isAuthenticated, `/products/${product.id}`);
+  const detailHref = `/products/${product.id}`;
   const cartHref = getProtectedHref(isAuthenticated, "/cart");
 
   async function addToCart(action: "cart" | "buy") {
@@ -45,8 +45,8 @@ export function ProductCard({ product, isAuthenticated = false }: { product: Pro
 
   return (
     <Card className="flex h-full flex-col overflow-hidden p-0">
-      <Image
-        src={getImageUrl(product.image_url)}
+      <ProductImage
+        src={product.image_url}
         alt={product.name}
         width={800}
         height={520}

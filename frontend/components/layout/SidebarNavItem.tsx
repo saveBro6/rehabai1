@@ -2,19 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType } from "react";
-import { LockKeyhole, type LucideProps } from "lucide-react";
+import { LockKeyhole } from "lucide-react";
 
 import { clsx } from "@/lib/utils";
 import { getProtectedHref } from "@/lib/auth-navigation";
+import type { SidebarItem } from "@/config/navigation";
 
 interface SidebarNavItemProps {
-  item: {
-    label: string;
-    href: string;
-    icon: ComponentType<LucideProps>;
-    requiresAuth?: boolean;
-  };
+  item: SidebarItem;
   isAuthenticated: boolean;
   onClick?: () => void;
 }

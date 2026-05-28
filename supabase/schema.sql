@@ -95,6 +95,7 @@ create table if not exists public.products (
   image_url text,
   stock_quantity int not null default 0 check (stock_quantity >= 0),
   is_recommended boolean not null default false,
+  is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -111,7 +112,7 @@ create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.patients(id) on delete cascade,
   total_amount numeric(12,2) not null default 0 check (total_amount >= 0),
-  status text not null default 'pending' check (status in ('pending', 'paid', 'cancelled')),
+  status text not null default 'pending' check (status in ('pending', 'processing', 'shipped', 'delivered', 'cancelled')),
   shipping_address text,
   created_at timestamptz not null default now()
 );
@@ -220,6 +221,7 @@ create index if not exists idx_doctor_schedule_slots_doctor_date on public.docto
 create index if not exists idx_doctor_notes_doctor_created on public.doctor_notes (doctor_id, created_at desc);
 create index if not exists idx_notifications_account_created on public.notifications (account_id, created_at desc);
 create index if not exists idx_products_category on public.products (category);
+create index if not exists idx_products_active_category on public.products (is_active, category);
 create index if not exists idx_user_subscriptions_user on public.user_subscriptions (user_id);
 create index if not exists idx_chatbot_messages_user_created on public.chatbot_messages (user_id, created_at desc);
 create index if not exists idx_exercises_category on public.exercises (category);
@@ -350,6 +352,34 @@ for update
 to authenticated
 using (account_id = (select auth.uid()))
 with check (account_id = (select auth.uid()));
+
+drop policy if exists "Products are publicly readable" on public.products;
+create policy "Products are publicly readable"
+on public.products
+for select
+to anon, authenticated
+using (is_active = true);
+
+drop policy if exists "Users can read products in own cart or orders" on public.products;
+create policy "Users can read products in own cart or orders"
+on public.products
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.cart_items
+    where public.cart_items.product_id = public.products.id
+      and public.cart_items.user_id = (select auth.uid())
+  )
+  or exists (
+    select 1
+    from public.order_items
+    join public.orders on public.orders.id = public.order_items.order_id
+    where public.order_items.product_id = public.products.id
+      and public.orders.user_id = (select auth.uid())
+  )
+);
 
 drop policy if exists "Doctors can manage own appointments" on public.appointments;
 create policy "Doctors can manage own appointments"

@@ -61,7 +61,8 @@ export const mockProducts: Product[] = [
     price: 180000,
     image_url: "/images/products/hand-grip.jpg",
     stock_quantity: 40,
-    is_recommended: true
+    is_recommended: true,
+    is_active: true
   },
   {
     id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2",
@@ -71,7 +72,8 @@ export const mockProducts: Product[] = [
     price: 220000,
     image_url: "/images/products/resistance-band.jpg",
     stock_quantity: 35,
-    is_recommended: true
+    is_recommended: true,
+    is_active: true
   },
   {
     id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3",
@@ -81,7 +83,8 @@ export const mockProducts: Product[] = [
     price: 1250000,
     image_url: "/images/products/walker.jpg",
     stock_quantity: 12,
-    is_recommended: true
+    is_recommended: true,
+    is_active: true
   }
 ];
 
