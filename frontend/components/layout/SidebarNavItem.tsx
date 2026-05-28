@@ -17,7 +17,7 @@ interface SidebarNavItemProps {
 export function SidebarNavItem({ item, isAuthenticated, onClick }: SidebarNavItemProps) {
   const pathname = usePathname();
   const Icon = item.icon;
-  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const active = pathname === item.href || (item.href !== "/" && item.href !== "/admin" && pathname.startsWith(`${item.href}/`));
   const locked = Boolean(item.requiresAuth && !isAuthenticated);
   const href = item.requiresAuth ? getProtectedHref(isAuthenticated, item.href) : item.href;
 
