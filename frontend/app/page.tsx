@@ -20,6 +20,7 @@ import {
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { FallbackImage } from "@/components/FallbackImage";
 import { getProtectedHref } from "@/lib/auth-navigation";
 import { visiblePricingPlans } from "@/lib/subscription-access";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
@@ -116,7 +117,7 @@ export default function LandingPage() {
                 <Button className="bg-emerald-600 hover:bg-emerald-700">Xem bài tập</Button>
               </Link>
               <Link href="/products">
-                <Button variant="secondary">Marketplace</Button>
+                <Button className="bg-emerald-600 hover:bg-emerald-700">Mua dụng cụ</Button>
               </Link>
               <Link href={appointmentHref}>
                 <Button className="bg-emerald-600 hover:bg-emerald-700">Tư vấn với bác sĩ</Button>
@@ -175,7 +176,7 @@ export default function LandingPage() {
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
                   {isProductService ? (
                     <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                      Marketplace <ArrowRight className="h-4 w-4" />
+                      Xem dụng cụ <ArrowRight className="h-4 w-4" />
                     </span>
                   ) : null}
                 </Card>
@@ -214,8 +215,8 @@ export default function LandingPage() {
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           {featuredDoctors.map((doctor) => (
             <Card key={doctor.id} className="border-emerald-100 transition hover:-translate-y-1 hover:shadow-md">
-              <Image
-                src={getImageUrl(doctor.avatar_url)}
+              <FallbackImage
+                src={doctor.avatar_url}
                 alt={doctor.full_name}
                 width={800}
                 height={520}

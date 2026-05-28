@@ -120,6 +120,7 @@ export interface Product {
   image_url?: string;
   stock_quantity: number;
   is_recommended: boolean;
+  is_active: boolean;
   created_at?: string;
 }
 

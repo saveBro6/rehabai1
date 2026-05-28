@@ -14,6 +14,17 @@ export async function getCartItems(userId: string) {
 
 export async function addToCart(userId: string, productId: string, quantity = 1) {
   const supabase = getSupabase();
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select("id, stock_quantity, is_active")
+    .eq("id", productId)
+    .maybeSingle();
+  assertNoSupabaseError(productError);
+
+  if (!product || product.is_active === false) {
+    throw new Error("PRODUCT_NOT_AVAILABLE");
+  }
+
   const { data: existing, error: existingError } = await supabase
     .from("cart_items")
     .select("*")
@@ -23,14 +34,23 @@ export async function addToCart(userId: string, productId: string, quantity = 1)
   assertNoSupabaseError(existingError);
 
   if (existing) {
+    const nextQuantity = existing.quantity + quantity;
+    if (typeof product.stock_quantity === "number" && nextQuantity > product.stock_quantity) {
+      throw new Error("PRODUCT_STOCK_EXCEEDED");
+    }
+
     const { data, error } = await supabase
       .from("cart_items")
-      .update({ quantity: existing.quantity + quantity })
+      .update({ quantity: nextQuantity })
       .eq("id", existing.id)
       .select("*")
       .single();
     assertNoSupabaseError(error);
     return data as CartItem;
+  }
+
+  if (typeof product.stock_quantity === "number" && quantity > product.stock_quantity) {
+    throw new Error("PRODUCT_STOCK_EXCEEDED");
   }
 
   const { data, error } = await supabase
