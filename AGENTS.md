@@ -59,7 +59,11 @@ Do not make business-logic changes during audit-only tasks.
 - Uploaded exercise videos must validate extension, content type, size, safe filename, and storage path.
 - Doctors may view full rehabilitation exercise videos for clinical guidance.
 - Patients without eligible full-access subscription may preview only the first one-third of a video before upgrade prompting.
-- Patients with the eligible Pro/full-access subscription may view the full exercise video.
+- Do not introduce a new Pro plan. SRS v6.18 Pro maps to the existing Standard and Premium plans.
+- Free is the default plan for newly registered Patients, and Basic is the entry paid plan.
+- Standard is the main full-rehabilitation plan and receives full exercise video access.
+- Premium includes all Standard features plus priority/specialist/advanced report features and also receives full exercise video access.
+- Free and Basic do not receive full exercise video access.
 - Full Patient video access must be enforced server-side or by a controlled delivery strategy; client-only hiding is not sufficient.
 - Exercise videos must not expose internal paths, private storage paths, secrets, or sensitive metadata.
 

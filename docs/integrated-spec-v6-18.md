@@ -51,7 +51,7 @@ Priority rules:
 | Add cart / checkout / orders | No | Yes | No unless separately allowed | No | Manage only | Payment, email, shipping support |
 | View own order history/shipping | No | Yes | No | Support only if delegated | Yes | Shipping/payment status |
 | Browse exercise metadata | Yes if public | Yes | Yes | Optional | Yes | No |
-| View full exercise video | No | Only eligible Pro/full plan | Yes | Only if delegated | Yes | Controlled media delivery only |
+| View full exercise video | No | Only Standard/Premium full-access plan | Yes | Only if delegated | Yes | Controlled media delivery only |
 | Preview one-third exercise video | Maybe login required | Yes if not full access | Not needed | Optional | Yes | Controlled media delivery only |
 | Book appointment | No | Yes | No | Can assist if delegated | Can manage | Email/payment support |
 | Flexible appointment request | No | Yes | Review if assigned | Can manage if delegated | Can manage | Email support |
@@ -92,7 +92,7 @@ Status values: implemented, partial, broken, missing, deferred, owned by another
 | UC-21 | Forgot / Reset Password | Final MVP decision: keep Supabase recovery link/token. SRS email-code reset is deferred. | Partial |
 | UC-22 | Manage Orders | Patient order history/detail/shipping/cancel. Service functions exist; pages missing. | Missing |
 | UC-23 | Manage Orders Admin | Admin order status, shipping, cancellation/refund handling. | Missing |
-| UC-24 | Subscribe to Plan | Patient subscription selection exists with Free/Basic/Standard/Premium. SRS Pro mapping unresolved. | Partial |
+| UC-24 | Subscribe to Plan | Patient subscription selection exists with Free/Basic/Standard/Premium. Final decision maps SRS v6.18 Pro video access to Standard and Premium. | Partial |
 | UC-25 | Manage Subscription | Patient subscription status/cancel/payment method/quota. Current pricing creates records; management page missing. | Partial |
 | UC-26 | Subscription Renewal | Recurring renewal/retry/failure states. | Missing/deferred |
 | UC-27 | Manage Subscriptions Admin | Admin subscription data/revenue/manual overrides. | Partial/missing UI |
@@ -110,7 +110,7 @@ Status values: implemented, partial, broken, missing, deferred, owned by another
 | UC-39 | Submit and Review Doctor Public Profile | Doctor submits, Admin approves/rejects, only approved profiles public. | Missing |
 | UC-40 | Manage Rehabilitation Exercises | Admin CRUD/publish/unpublish/soft-delete exercise records separate from products. Current exercise table/services exist; admin UI incomplete. | Partial |
 | UC-41 | Manage Rehabilitation Exercise Video | Admin adds/replaces/removes one primary exercise video by URL or upload, with validation and source priority. | Missing/partial schema |
-| UC-42 | View Subscription-Gated Rehabilitation Exercise Video | Doctor full video; Patient one-third preview without eligible plan; Pro full access. Must be enforced server-side/controlled delivery. | Missing |
+| UC-42 | View Subscription-Gated Rehabilitation Exercise Video | Doctor full video; Patient one-third preview on Free/Basic; Standard/Premium full access. Must be enforced server-side/controlled delivery. | Missing |
 
 ## 5. Contradiction And Inconsistency Audit
 
@@ -126,7 +126,7 @@ Status values: implemented, partial, broken, missing, deferred, owned by another
 | H | Exercise video gating | SRS requires one-third preview and full-access gating; current repo has `exercises.video_url` but no video UI and uses client guards. | Full exercise video access must be enforced server-side or through signed/controlled delivery. Client-only timers are insufficient. |
 | I | Chatbot scope | Specs include chatbot/OpenRouter; current ownership says chatbot belongs to another member. | Do not touch chatbot implementation unless explicitly assigned. Preserve integration boundaries only. |
 | J | Guest/product access | Final Spec gates product detail; SRS allows Guest to view product metadata/images. Current product detail is `RequireAuth`. | Guest may view product metadata/images. Cart/checkout/order require Patient login. |
-| K | Subscription plan naming | Final Spec and seed use Free/Basic/Standard/Premium; SRS v6.18 says Free/Pro and Pro unlocks full video. | Resolve plan mapping before video gating. Do not hard-code a Pro assumption into UI/schema until approved. |
+| K | Subscription plan naming | Final Spec and seed use Free/Basic/Standard/Premium; SRS v6.18 says Free/Pro and Pro unlocks full video. | Do not add a Pro plan. SRS v6.18 Pro maps to current Standard and Premium for full exercise video access. Free and Basic do not receive full exercise video access. |
 | L | Route namespace mismatch | Final Spec uses `/patient/...` and `/admin/dashboard`; current repo uses `/dashboard`, `/profile`, `/appointments`, `/cart`, `/recovery-plan`, `/progress`, and `/admin`. | Keep current routes unless a route migration is approved; missing pages can use current namespace or planned `/patient` namespace by explicit decision. |
 | M | Product category model | Final Spec has `product_categories`; current repo stores category text on `products`. | Keep category text for now. Add category table only with a migration task. |
 | N | Storage buckets | Final Spec names `patient-images`, `doctor-images`, `product-images`, `rehab-files`, `ai-files`; current repo creates one public `images` bucket. | Keep current bucket for existing images. Add private/controlled buckets only with a media/security task. |
@@ -151,7 +151,7 @@ Use this table before opening any feature branch or editing application code. If
 | Doctor visibility vs available slots | Public Doctor visibility does not require available slots. Active, approved, not-deleted public doctors can appear; lack of slots routes Patient to flexible appointment request. | Doctors list/detail, appointment booking, doctor schedule, public profile review | Yes | P0 |
 | Forgot/reset password code vs Supabase recovery link | Keep Supabase recovery link/token for MVP. Custom email-code reset is deferred. | Forgot/reset password pages, Supabase Auth config, email docs | No immediate change unless UX copy conflicts | P2 |
 | `profiles` schema names vs `accounts`/`patients`/`doctors` | Keep current `accounts`, `patients`, and `doctors` schema names. Do not rename without approved migration plan. | Supabase schema, migrations, RLS, services, generated types | No immediate change | P0 guardrail |
-| Free/Pro vs Free/Basic/Standard/Premium subscription mapping | Unresolved. Do not implement full exercise video access until Pro mapping is approved. | Subscriptions, pricing, video gating, feature gates | Yes after decision | P0 open |
+| Free/Pro vs Free/Basic/Standard/Premium subscription mapping | Keep the existing Free, Basic, Standard, Premium model. Do not add Pro. SRS v6.18 Pro maps to Standard and Premium for full exercise video access; Free and Basic receive preview only. Premium includes all Standard features plus priority/specialist/advanced report features. | Subscriptions, pricing, video gating, feature gates | Yes | P0 |
 | Mock payment vs real payment | Mock checkout is allowed, but it must be labeled as mock payment and not treated as real gateway-confirmed revenue. | Cart, checkout, orders, admin revenue/reporting | Yes | P0 |
 | Shipping MVP missing | MVP uses manual admin shipment tracking. Real shipping provider API is deferred. | Orders, admin orders, patient order detail, schema/RLS | Yes | P1 |
 | Admin summary vs full admin suite | Current `/admin` summary is not enough. Build admin pages as scoped tasks. | Admin layout/routes, products, orders, doctors, exercises, reports | Yes | P1 |
@@ -178,16 +178,19 @@ Use this table before opening any feature branch or editing application code. If
 - Mock checkout is allowed but must be labeled as mock payment and not treated as real gateway-confirmed revenue.
 - Chatbot implementation is out of scope and owned by another member.
 - Exercise video full access must be server-side or controlled-delivery gated.
+- Use the existing subscription model: Free, Basic, Standard, Premium. Do not introduce a new Pro plan.
+- Free is the default plan for newly registered Patients.
+- Basic is the entry paid plan.
+- Standard is the main full-rehabilitation plan and maps to SRS v6.18 Pro for exercise video access.
+- Premium is the advanced plan, includes all Standard features, adds priority/specialist/advanced report features, and also has full exercise video access.
+- Free and Basic do not receive full exercise video access; they receive only the approved preview behavior.
+- Real recurring payment and payment webhooks remain deferred.
+- Current subscription purchase is mock unless a real payment gateway is implemented.
 
 ## 8. Open Decisions Before Implementation
 
 Do not code a feature affected by these questions until the decision is made.
 
-- Which existing plans map to v6.18 Pro full video access?
-  - Option A: Basic, Standard, and Premium get full video.
-  - Option B: Standard and Premium get full video.
-  - Option C: Premium only gets full video.
-  - Option D: Add an explicit Pro plan.
 - Should new patient pages use current short routes or `/patient/...` routes?
 - Should shipping use a new `shipments` table now or extend `orders` first?
 - Should product categories remain text or move to a `product_categories` table?
@@ -226,7 +229,7 @@ Shipping tasks:
 
 Exercise video tasks:
 
-- Decide Pro/full-video subscription mapping.
+- Apply the approved full-video mapping: Standard and Premium get full access; Free and Basic get preview only.
 - Add Exercise Library video rendering for approved URLs.
 - Add upload/replacement rules for one primary exercise video.
 - Add controlled delivery or signed access for Doctor full video and Patient one-third/full access.
@@ -478,6 +481,8 @@ Final Patient decisions:
 - Wallet/refund lifecycle is deferred unless approved.
 - Real payment gateway is deferred; mock checkout is allowed but must be labeled mock.
 - Exercise video full access must be server-side or controlled-delivery gated.
+- SRS v6.18 Pro maps to Standard and Premium in the current repo. Free and Basic do not receive full exercise video access.
+- Standard is the main full-rehabilitation plan. Premium includes all Standard features plus priority/specialist/advanced report features.
 - Chatbot implementation is out of scope and owned by another member.
 
 ## 20. Patient Flow Current Repo Status
@@ -495,7 +500,7 @@ Final Patient decisions:
 | Checkout/order creation | Partial/broken | `/cart`, `orders.service.ts`, `orders`, `order_items` | Mock checkout creates orders from cart, but it is not transaction-safe, does not decrement stock, and inserts `status: "paid"`, which must not imply real gateway-confirmed revenue. |
 | Patient order history/detail | Missing | `orders.service.ts` has `getOrders` and `getOrderById`; `orders`, `order_items` | No `/orders`, `/orders/[id]`, `/patient/orders`, or equivalent UI exists. |
 | Shipping status | Missing/partial | `orders.shipping_address` | No shipment status, carrier, tracking number, shipped/delivered timestamps, admin shipping UI, or Patient tracking UI. |
-| Subscription management | Partial | `/pricing`, `subscriptions.service.ts`, `subscriptions`, `user_subscriptions`, `RequireSubscription` | Plan listing and subscription access helpers exist. SRS v6.18 Pro full-video mapping is unresolved against Free/Basic/Standard/Premium. |
+| Subscription management | Partial | `/pricing`, `subscriptions.service.ts`, `subscriptions`, `user_subscriptions`, `RequireSubscription` | Plan listing and subscription access helpers exist. Approved video mapping is Standard/Premium full access, Free/Basic preview only. Real recurring payment/webhook remains deferred. |
 | Exercise Library | Partial | `/exercises`, `/exercises/[id]`, `exercises.service.ts`, `exercises` | Exercise list/detail exist. Detail is Basic subscription-gated and does not implement one-third preview or full video access rules. |
 | Exercise video access | Missing/partial | `exercises.video_url`, `ExerciseDetail`, `RequireSubscription` | No controlled delivery, no server-side one-third preview/full-access enforcement, and no Doctor full-access exception. |
 | Recovery plan | Partial | `/recovery-plan`, `/recovery-plan/create`, `/recovery-plan/[id]`, `recovery_plans`, `recovery_plan_exercises` | Standard subscription gate exists. Plan generation/detail exist but need stronger business validation and ownership checks for production. |
@@ -516,7 +521,7 @@ Final Patient decisions:
 - Patient appointment detail page, cancellation flow, and flexible appointment request flow.
 - Route namespace decision for current short Patient routes versus `/patient/...`.
 - Subscription management page beyond pricing and helpers.
-- Final mapping from SRS v6.18 Pro full-video access to current Free/Basic/Standard/Premium plans.
+- Implementation of the approved Standard/Premium full-video access and Free/Basic preview behavior.
 - Server-side or controlled-delivery exercise video preview/full-access enforcement.
 - Patient notifications page.
 - Recovery plan/progress hardening, including ownership/security verification and richer reporting.
@@ -556,7 +561,7 @@ Required future schema or policy support, depending on approved implementation t
 5. Add Patient order history and order detail pages using the existing order read functions.
 6. Add manual shipping MVP after deciding whether to extend `orders` or create `shipments`.
 7. Expand Patient appointments with detail, cancel/status view, and flexible appointment request after the data model decision.
-8. Add or confirm subscription management UX and decide Pro/full-video plan mapping.
+8. Add or confirm subscription management UX and apply the approved Standard/Premium full-video access mapping.
 9. Implement Exercise Library video preview/full access under controlled delivery, not under Product.
 10. Add Patient notifications after appointment/order notification events are defined.
 11. Harden RLS/server checks for Patient-owned records, buyer-only actions, subscription-gated data, and video delivery.
@@ -564,7 +569,6 @@ Required future schema or policy support, depending on approved implementation t
 ## 24. Patient Flow Open Decisions Before Coding
 
 - Should new Patient pages use current short routes or `/patient/...`?
-- Which existing plan maps to SRS v6.18 Pro full exercise video access?
 - Should order history be `/orders` or `/patient/orders`?
 - Should checkout be a separate `/checkout` route or remain in `/cart`?
 - Should shipping MVP use a `shipments` table or extend `orders` first?
@@ -588,7 +592,7 @@ Required future schema or policy support, depending on approved implementation t
 | Appointment booking/request | Partial | `/doctors/[id]`, `/appointments`, doctor appointment pages, `appointments` table | Flexible request model, slot booking semantics, patient detail/cancel, admin/staff management incomplete. |
 | Exercise Library | Partial | `/exercises`, `/exercises/[id]`, `exercises.service.ts`, `exercises` table | Video UI/access/upload/admin management incomplete. |
 | Exercise video | Missing/partial schema | `exercises.video_url` exists | No rendering, upload, validation, one-third preview, doctor full access, or controlled delivery. |
-| Subscription gating | Partial | `/pricing`, `RequireSubscription`, `subscriptions`, `user_subscriptions` | Pro mapping unresolved; client-only gates insufficient for media access. |
+| Subscription gating | Partial | `/pricing`, `RequireSubscription`, `subscriptions`, `user_subscriptions` | Plan mapping is resolved: Standard/Premium full exercise video access; Free/Basic preview only. Client-only gates remain insufficient for media access. |
 | Reports/audit logs | Missing/partial | `/admin` summary | No audit log table/UI, real reports, revenue/payment data. |
 | Chatbot boundary | Owned by another member | `ChatbotWidget`, `chatbot.service.ts`, `chatbot_messages` | Do not modify. Only document integration needs and protect secrets. |
 
@@ -625,7 +629,7 @@ Phase 4: Shipping MVP
 Phase 5: Exercise video library and access gating
 
 - Keep videos in Exercise Library only.
-- Decide Pro mapping against current Free/Basic/Standard/Premium seed.
+- Use the approved Standard/Premium full-video access mapping against the current Free/Basic/Standard/Premium seed.
 - Add safe exercise `video_url` rendering.
 - Add upload/replacement policy if required.
 - Enforce Doctor full access and Patient one-third preview/full access through controlled delivery, not a client-only timer.
