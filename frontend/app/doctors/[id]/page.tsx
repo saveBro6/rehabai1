@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 
 import { AppointmentForm } from "@/components/AppointmentForm";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { Card } from "@/components/Card";
+import { FallbackImage } from "@/components/FallbackImage";
 import { getDoctorById } from "@/services/doctors.service";
 import { formatCurrency } from "@/lib/utils";
 import type { Doctor } from "@/types";
@@ -23,8 +23,8 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
     <RequireAuth>
     <section className="mx-auto grid max-w-7xl gap-8 px-4 py-10 lg:grid-cols-[1fr_420px]">
       <div>
-        <Image
-          src={doctor.avatar_url || "/images/placeholders/rehab-equipment.jpg"}
+        <FallbackImage
+          src={doctor.avatar_url}
           alt={doctor.full_name}
           width={1000}
           height={560}
