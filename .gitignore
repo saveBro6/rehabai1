@@ -11,3 +11,4 @@ venv/
 .env.local
 .DS_Store
 .vs/
+supabase/.temp/
