@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { SidebarNavItem } from "@/components/layout/SidebarNavItem";
-import { sidebarItems } from "@/config/navigation";
+import { getSidebarSections } from "@/config/navigation";
 import { clsx } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -16,8 +16,9 @@ export type DynamicSidebarProps = {
 
 export function DynamicSidebar({ open, onClose }: DynamicSidebarProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const { isAuthenticated, profile } = useAuth();
-  const visibleSidebarItems = sidebarItems.filter((item) => !item.allowedRoles || item.allowedRoles.includes(profile?.role || ""));
+  const { isAuthenticated, isLoading, profile } = useAuth();
+  const waitingForProfile = isAuthenticated && (isLoading || !profile);
+  const sidebarSections = waitingForProfile ? [] : getSidebarSections(profile?.role, isAuthenticated);
 
   useEffect(() => {
     if (!open) return;
@@ -74,9 +75,15 @@ export function DynamicSidebar({ open, onClose }: DynamicSidebarProps) {
             <X className="h-5 w-5" />
           </button>
         </div>
-        <nav className="grid gap-1 overflow-y-auto px-3 py-4">
-          {visibleSidebarItems.map((item) => (
-            <SidebarNavItem key={item.href} item={item} isAuthenticated={isAuthenticated} onClick={onClose} />
+        <nav className="grid gap-5 overflow-y-auto px-3 py-4">
+          {waitingForProfile ? <p className="px-3 text-sm text-slate-500">Đang tải menu...</p> : null}
+          {sidebarSections.map((section) => (
+            <div key={section.label} className="grid gap-1">
+              <p className="px-3 text-xs font-bold uppercase tracking-wide text-slate-400">{section.label}</p>
+              {section.items.map((item) => (
+                <SidebarNavItem key={item.href} item={item} isAuthenticated={isAuthenticated} onClick={onClose} />
+              ))}
+            </div>
           ))}
         </nav>
       </aside>
