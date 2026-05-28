@@ -34,7 +34,7 @@ export async function getAdminOrders() {
     .order("created_at", { ascending: false });
   assertNoSupabaseError(error);
 
-  return hydrateOrderBuyers((data || []) as AdminOrder[]);
+  return hydrateOrderBuyers((data || []) as unknown as AdminOrder[]);
 }
 
 export async function getAdminOrderById(orderId: string) {
@@ -43,7 +43,7 @@ export async function getAdminOrderById(orderId: string) {
   assertNoSupabaseError(error);
   if (!data) return null;
 
-  const [order] = await hydrateOrderBuyers([data as AdminOrder]);
+  const [order] = await hydrateOrderBuyers([data as unknown as AdminOrder]);
   return order || null;
 }
 
@@ -64,7 +64,7 @@ export async function updateAdminOrderStatus(orderId: string, status: AdminOrder
     throw new Error("Could not update order status.");
   }
 
-  const [order] = await hydrateOrderBuyers([data as AdminOrder]);
+  const [order] = await hydrateOrderBuyers([data as unknown as AdminOrder]);
   return order;
 }
 

@@ -56,7 +56,7 @@ export async function getCurrentUserSubscription(userId: string) {
     .maybeSingle();
   assertNoSupabaseError(error);
 
-  if (data) return data as UserSubscription;
+  if (data) return data as unknown as UserSubscription;
 
   const subscriptions = await getSubscriptions();
   const freePlan = subscriptions.find((plan) => plan.name === "Free") || subscriptions[0];

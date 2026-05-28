@@ -18,7 +18,7 @@ export async function getExerciseLogs(userId?: string) {
 
   const { data, error } = await query;
   assertNoSupabaseError(error);
-  return (data || []) as ExerciseLog[];
+  return (data || []) as unknown as ExerciseLog[];
 }
 
 export async function createExerciseLog(payload: ExerciseLogCreate) {

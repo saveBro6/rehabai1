@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 import { AppointmentForm } from "@/components/AppointmentForm";
-import { RequireAuth } from "@/components/auth/RequireAuth";
+import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { FallbackImage } from "@/components/FallbackImage";
 import { getDoctorById } from "@/services/doctors.service";
@@ -12,15 +13,47 @@ import type { Doctor } from "@/types";
 
 export default function DoctorDetailPage({ params }: { params: { id: string } }) {
   const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    void getDoctorById(params.id).then(setDoctor);
+    let active = true;
+    setLoading(true);
+
+    void getDoctorById(params.id)
+      .then((data) => {
+        if (active) setDoctor(data);
+      })
+      .catch(() => {
+        if (active) setDoctor(null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [params.id]);
 
-  if (!doctor) return <RequireAuth><section className="mx-auto max-w-7xl px-4 py-10 text-slate-500">Đang tải thông tin bác sĩ...</section></RequireAuth>;
+  if (loading) {
+    return <section className="mx-auto max-w-7xl px-4 py-10 text-slate-500">Đang tải thông tin bác sĩ...</section>;
+  }
+
+  if (!doctor) {
+    return (
+      <section className="mx-auto max-w-7xl px-4 py-10">
+        <Card>
+          <h1 className="text-2xl font-bold text-slate-950">Không tìm thấy hồ sơ bác sĩ</h1>
+          <p className="mt-2 text-slate-600">Hồ sơ bác sĩ chưa được duyệt công khai hoặc không còn khả dụng.</p>
+          <Link className="mt-5 inline-flex" href="/doctors">
+            <Button>Xem bác sĩ khác</Button>
+          </Link>
+        </Card>
+      </section>
+    );
+  }
 
   return (
-    <RequireAuth>
     <section className="mx-auto grid max-w-7xl gap-8 px-4 py-10 lg:grid-cols-[1fr_420px]">
       <div>
         <FallbackImage
@@ -45,6 +78,5 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
         <div className="mt-5"><AppointmentForm doctorId={doctor.id} /></div>
       </Card>
     </section>
-    </RequireAuth>
   );
 }

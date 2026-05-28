@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { ProductImage } from "@/components/ProductImage";
+import { ImagePreview } from "@/components/ImagePreview";
 import type { AdminProductPayload } from "@/services/admin-products.service";
 import type { Product } from "@/types";
 
@@ -179,7 +179,7 @@ export function ProductForm({ mode, product, onSubmit }: ProductFormProps) {
       <Card className="h-fit">
         <h2 className="text-xl font-bold text-slate-950">Xem trước ảnh</h2>
         <div className="mt-4 overflow-hidden rounded-lg border border-slate-100">
-          <ProductImage src={imageUrl} alt={name || "Ảnh sản phẩm"} width={720} height={480} className="h-56 w-full object-cover" />
+          <ImagePreview src={imageUrl} alt={name || "Ảnh sản phẩm"} className="h-56 w-full object-cover" />
         </div>
         <p className="mt-3 text-sm text-slate-600">
           MVP chỉ nhập đường dẫn ảnh. Upload ảnh sản phẩm sẽ làm ở task riêng nếu cần.

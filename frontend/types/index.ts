@@ -2,6 +2,7 @@ export type Role = "patient" | "doctor" | "therapist" | "admin";
 export type AppointmentStatus = "pending" | "confirmed" | "completed" | "cancelled" | "rejected";
 export type PaymentStatus = "unpaid" | "paid" | "refunded";
 export type AccountStatus = "active" | "inactive" | "locked";
+export type DoctorPublicProfileStatus = "draft" | "submitted" | "approved" | "rejected";
 export type DoctorScheduleStatus = "available" | "booked" | "blocked" | "cancelled";
 export type ConsultationType = "online";
 export type ExerciseDifficulty = "beginner" | "intermediate" | "advanced" | "Cơ bản" | "Trung cấp" | "Nâng cao";
@@ -38,7 +39,6 @@ export interface User extends Patient {
 
 export interface Doctor {
   id: string;
-  account_id?: string | null;
   full_name: string;
   specialty: string;
   avatar_url?: string;
@@ -47,6 +47,11 @@ export interface Doctor {
   rating: number;
   consultation_fee: number;
   available_online: boolean;
+  public_profile_status: DoctorPublicProfileStatus;
+  public_profile_submitted_at?: string | null;
+  public_profile_reviewed_at?: string | null;
+  public_profile_rejection_reason?: string | null;
+  public_profile_reviewed_by?: string | null;
   created_at?: string;
 }
 

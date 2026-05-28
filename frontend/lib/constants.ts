@@ -26,7 +26,8 @@ export const mockDoctors: Doctor[] = [
     experience_years: 12,
     rating: 4.9,
     consultation_fee: 350000,
-    available_online: true
+    available_online: true,
+    public_profile_status: "approved"
   },
   {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
@@ -37,7 +38,8 @@ export const mockDoctors: Doctor[] = [
     experience_years: 9,
     rating: 4.8,
     consultation_fee: 280000,
-    available_online: true
+    available_online: true,
+    public_profile_status: "approved"
   },
   {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
@@ -48,7 +50,8 @@ export const mockDoctors: Doctor[] = [
     experience_years: 15,
     rating: 4.9,
     consultation_fee: 450000,
-    available_online: true
+    available_online: true,
+    public_profile_status: "approved"
   }
 ];
 

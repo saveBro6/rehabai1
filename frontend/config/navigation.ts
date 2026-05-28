@@ -166,6 +166,13 @@ export const adminSidebarSections = [
         allowedRoles: ["admin"]
       },
       {
+        label: "Quản lý bác sĩ",
+        href: "/admin/doctors",
+        icon: Stethoscope,
+        requiresAuth: true,
+        allowedRoles: ["admin"]
+      },
+      {
         label: "Quản lý sản phẩm",
         href: "/admin/products",
         icon: Package,
@@ -269,6 +276,7 @@ export const pageTitles: Record<string, string> = {
   "/admin/orders": "Quản lý đơn hàng",
   "/admin/reports": "Báo cáo doanh thu",
   "/admin/products": "Quản lý sản phẩm",
+  "/admin/doctors": "Quản lý bác sĩ",
   "/login": "Đăng nhập",
   "/register": "Đăng ký"
 };
