@@ -1,13 +1,26 @@
+import type { ComponentType } from "react";
+import type { LucideProps } from "lucide-react";
 import {
+  BarChart3,
   CalendarCheck,
+  ClipboardList,
   CreditCard,
   Dumbbell,
   LayoutDashboard,
+  Package,
   Route,
   ShoppingBag,
   Stethoscope,
   TrendingUp
 } from "lucide-react";
+
+export type SidebarItem = {
+  label: string;
+  href: string;
+  icon: ComponentType<LucideProps>;
+  requiresAuth?: boolean;
+  allowedRoles?: readonly string[];
+};
 
 export const sidebarItems = [
   {
@@ -57,8 +70,29 @@ export const sidebarItems = [
     href: "/pricing",
     icon: CreditCard,
     requiresAuth: false
+  },
+  {
+    label: "Quản lý đơn hàng",
+    href: "/admin/orders",
+    icon: ClipboardList,
+    requiresAuth: true,
+    allowedRoles: ["admin"]
+  },
+  {
+    label: "Báo cáo doanh thu",
+    href: "/admin/reports",
+    icon: BarChart3,
+    requiresAuth: true,
+    allowedRoles: ["admin"]
+  },
+  {
+    label: "Quản lý sản phẩm",
+    href: "/admin/products",
+    icon: Package,
+    requiresAuth: true,
+    allowedRoles: ["admin"]
   }
-] as const;
+] satisfies readonly SidebarItem[];
 
 export const pageTitles: Record<string, string> = {
   "/": "Trang chủ",
@@ -73,6 +107,9 @@ export const pageTitles: Record<string, string> = {
   "/profile": "Hồ sơ",
   "/cart": "Giỏ hàng",
   "/admin": "Quản trị",
+  "/admin/orders": "Quản lý đơn hàng",
+  "/admin/reports": "Báo cáo doanh thu",
+  "/admin/products": "Quản lý sản phẩm",
   "/login": "Đăng nhập",
   "/register": "Đăng ký"
 };

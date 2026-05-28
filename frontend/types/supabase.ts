@@ -96,6 +96,7 @@ export type Database = {
         image_url: string | null;
         stock_quantity: number;
         is_recommended: boolean;
+        is_active: boolean;
         created_at: string;
       }>;
       cart_items: TableDefinition<{
@@ -109,7 +110,7 @@ export type Database = {
         id: string;
         user_id: string;
         total_amount: number;
-        status: "pending" | "paid" | "cancelled";
+        status: "pending" | "processing" | "shipped" | "delivered" | "cancelled";
         shipping_address: string | null;
         created_at: string;
       }>;
