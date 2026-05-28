@@ -1,5 +1,5 @@
-export function getAuthRedirectPath(targetPath: string) {
-  return `/login?redirect=${encodeURIComponent(targetPath)}`;
+export function getAuthRedirectPath(_targetPath: string) {
+  return "/login";
 }
 
 export function getProtectedHref(isAuthenticated: boolean, targetPath: string) {

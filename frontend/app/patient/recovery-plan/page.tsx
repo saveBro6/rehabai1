@@ -30,7 +30,7 @@ function RecoveryPlanContent() {
           <p className="text-sm font-bold uppercase text-emerald-700">Recovery Plan</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-950">Lộ trình tập luyện cá nhân hóa</h1>
         </div>
-        <Link href="/recovery-plan/create"><Button>Tạo lộ trình mới</Button></Link>
+        <Link href="/patient/recovery-plan/create"><Button>Tạo lộ trình mới</Button></Link>
       </div>
       {loading ? <p className="mt-8 text-slate-500">Đang tải lộ trình...</p> : <div className="mt-8 grid gap-5 md:grid-cols-2">{plans.map((plan) => <RecoveryPlanCard key={plan.id} plan={plan} />)}</div>}
       {!loading && !plans.length ? <p className="mt-8 text-slate-500">Chưa có lộ trình. Hãy tạo hồ sơ phục hồi để bắt đầu.</p> : null}

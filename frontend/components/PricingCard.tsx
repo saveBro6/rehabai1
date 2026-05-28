@@ -19,7 +19,7 @@ export function PricingCard({ plan, highlighted = false }: { plan: Subscription;
 
   async function subscribe() {
     if (!isAuthenticated) {
-      redirectToLogin(router, "/pricing");
+      redirectToLogin(router, "/patient/pricing");
       return;
     }
     if (!user) return;

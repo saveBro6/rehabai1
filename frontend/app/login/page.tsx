@@ -42,7 +42,7 @@ function LoginForm() {
 
     const userProfile = data.user ? await getUserProfile(data.user.id) : null;
     const redirectTo = searchParams.get("redirect");
-    const doctorDefault = userProfile?.role === "doctor" ? (userProfile.must_change_password ? "/doctor/change-password" : "/doctor/dashboard") : "/dashboard";
+    const doctorDefault = userProfile?.role === "doctor" ? (userProfile.must_change_password ? "/doctor/change-password" : "/doctor/dashboard") : "/patient/dashboard";
     const safeRedirect = isSafeRedirectPath(redirectTo) ? redirectTo : doctorDefault;
     pushToast("Đăng nhập thành công", "Đang chuyển đến trang tiếp theo.");
     router.push(safeRedirect || doctorDefault);
@@ -70,7 +70,7 @@ function LoginForm() {
 
           <Button disabled={loading}>{loading ? "Đang đăng nhập..." : "Đăng nhập"}</Button>
         </form>
-        <p className="mt-4 text-sm text-slate-600">Chưa có tài khoản? <Link className="font-semibold text-emerald-700" href="/register">Đăng ký</Link></p>
+        <p className="mt-4 text-sm text-slate-600">Chưa có tài khoản? <Link className="font-semibold text-emerald-700" href="/patient/register">Đăng ký</Link></p>
       </Card>
     </section>
 

@@ -73,7 +73,7 @@ export default function RegisterPage() {
     }
 
     pushToast("Đăng ký thành công!", "Đang chuyển đến dashboard.");
-    router.push("/dashboard");
+    router.push("/patient/dashboard");
   }
 
   return (

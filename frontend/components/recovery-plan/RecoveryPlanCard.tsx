@@ -20,7 +20,7 @@ export function RecoveryPlanCard({ plan }: { plan: RecoveryPlan }) {
         <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-emerald-600" />{plan.sessions_per_week} buoi/tuan</span>
         <span className="inline-flex items-center gap-2"><Target className="h-4 w-4 text-emerald-600" />{plan.current_mobility_level}</span>
       </div>
-      <Link href={`/recovery-plan/${plan.id}`} className="mt-5 block">
+      <Link href={`/patient/recovery-plan/${plan.id}`} className="mt-5 block">
         <Button variant="secondary" className="w-full">Xem lo trinh</Button>
       </Link>
     </Card>

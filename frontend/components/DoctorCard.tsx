@@ -9,8 +9,8 @@ import { formatCurrency, getImageUrl } from "@/lib/utils";
 import type { Doctor } from "@/types";
 
 export function DoctorCard({ doctor, isAuthenticated = false }: { doctor: Doctor; isAuthenticated?: boolean }) {
-  const detailHref = getProtectedHref(isAuthenticated, `/doctors/${doctor.id}`);
-  const appointmentHref = getProtectedHref(isAuthenticated, "/appointments");
+  const detailHref = getProtectedHref(isAuthenticated, `/patient/doctors/${doctor.id}`);
+  const appointmentHref = getProtectedHref(isAuthenticated, "/patient/appointments");
 
   return (
     <Card className="flex h-full flex-col overflow-hidden p-0">

@@ -9,7 +9,7 @@ import { getImageUrl } from "@/lib/utils";
 import type { Exercise } from "@/types";
 
 export function ExerciseCard({ exercise, isAuthenticated = false }: { exercise: Exercise; isAuthenticated?: boolean }) {
-  const guideHref = getProtectedHref(isAuthenticated, `/exercises/${exercise.id}`);
+  const guideHref = getProtectedHref(isAuthenticated, `/patient/exercises/${exercise.id}`);
 
   return (
     <Card className="flex h-full flex-col overflow-hidden p-0">

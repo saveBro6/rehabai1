@@ -11,7 +11,7 @@ interface ChatMessage {
 }
 
 // 1. Định vị đường dẫn tuyệt đối tới file system_prompt.md
-const filePath = path.join(process.cwd(), 'app/api/prompts/system_prompt.md');
+const filePath = path.join(process.cwd(), 'app/patient/api/prompts/system_prompt.md');
 
 // 2. Đọc nội dung file trực tiếp từ Server (Đảm bảo mã hóa utf-8)
 const systemPrompt = fs.readFileSync(filePath, 'utf-8');

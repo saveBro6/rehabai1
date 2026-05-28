@@ -39,7 +39,7 @@ export function RecoveryPlanForm() {
     await generateRecoveryPlanExercises(plan.id);
     setLoading(false);
     pushToast("Da tao lo trinh", "He thong da sinh lich tap theo rule-based logic.");
-    router.push(`/recovery-plan/${plan.id}`);
+    router.push(`/patient/recovery-plan/${plan.id}`);
   }
 
   return (

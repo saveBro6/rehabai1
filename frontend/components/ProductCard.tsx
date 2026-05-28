@@ -19,8 +19,8 @@ export function ProductCard({ product, isAuthenticated = false }: { product: Pro
   const router = useRouter();
   const { pushToast } = useToast();
   const [pendingAction, setPendingAction] = useState<"cart" | "buy" | null>(null);
-  const detailHref = getProtectedHref(isAuthenticated, `/products/${product.id}`);
-  const cartHref = getProtectedHref(isAuthenticated, "/cart");
+  const detailHref = getProtectedHref(isAuthenticated, `/patient/products/${product.id}`);
+  const cartHref = getProtectedHref(isAuthenticated, "/patient/cart");
 
   async function addToCart(action: "cart" | "buy") {
     if (!isAuthenticated) {
@@ -34,7 +34,7 @@ export function ProductCard({ product, isAuthenticated = false }: { product: Pro
       await addCartItem(user.id, product.id);
       pushToast("Đã thêm vào giỏ", product.name);
       if (action === "buy") {
-        router.push("/cart");
+        router.push("/patient/cart");
       }
     } catch {
       pushToast("Không thể thêm vào giỏ", "Vui lòng thử lại sau.");

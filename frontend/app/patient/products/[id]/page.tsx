@@ -53,7 +53,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
         <p className="mt-2 text-sm text-slate-500">Số lượng sản phẩm còn lại: {product.stock_quantity}</p>
         <div className="mt-8 flex gap-3">
           <Button onClick={addToCart} disabled={loading}>{loading ? "Đang thêm..." : "Thêm vào giỏ"}</Button>
-          <Link href="/cart"><Button variant="secondary">Đến giỏ hàng</Button></Link>
+          <Link href="/patient/cart"><Button variant="secondary">Đến giỏ hàng</Button></Link>
         </div>
       </Card>
     </section>

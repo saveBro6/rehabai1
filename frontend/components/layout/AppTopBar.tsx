@@ -18,8 +18,8 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
   const router = useRouter();
   const { isAuthenticated, isLoading, signOut } = useAuth();
   const title = getPageTitle(pathname);
-  const cartHref = isLoading ? "/cart" : getProtectedHref(isAuthenticated, "/cart");
-  const profileHref = isLoading ? "/profile" : getProtectedHref(isAuthenticated, "/profile");
+  const cartHref = isLoading ? "/patient/cart" : getProtectedHref(isAuthenticated, "/patient/cart");
+  const profileHref = isLoading ? "/patient/profile" : getProtectedHref(isAuthenticated, "/patient/profile");
 
   async function logout() {
     await signOut();

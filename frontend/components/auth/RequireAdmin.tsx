@@ -23,7 +23,7 @@ export function RequireAdmin({ children }: { children: React.ReactNode }) {
             <ShieldAlert className="mx-auto h-10 w-10 text-emerald-600" />
             <h1 className="mt-4 text-2xl font-bold text-slate-950">Không có quyền truy cập</h1>
             <p className="mx-auto mt-3 max-w-xl text-slate-600">Trang này chỉ dành cho tài khoản quản trị.</p>
-            <Link href="/dashboard" className="mt-6 inline-flex">
+            <Link href="/patient/dashboard" className="mt-6 inline-flex">
               <Button>Về dashboard</Button>
             </Link>
           </Card>

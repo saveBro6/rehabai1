@@ -57,9 +57,9 @@ export default function LandingPage() {
   const [featuredExercises, setFeaturedExercises] = useState<Exercise[]>([]);
   const [subscriptionPlans, setSubscriptionPlans] = useState<Subscription[]>([]);
   const [loadingHighlights, setLoadingHighlights] = useState(true);
-  const createPlanHref = getProtectedHref(isAuthenticated, "/recovery-plan/create");
-  const appointmentHref = getProtectedHref(isAuthenticated, "/appointments");
-  const pricingHref = getProtectedHref(isAuthenticated, "/pricing");
+  const createPlanHref = getProtectedHref(isAuthenticated, "/patient/recovery-plan/create");
+  const appointmentHref = getProtectedHref(isAuthenticated, "/patient/appointments");
+  const pricingHref = getProtectedHref(isAuthenticated, "/patient/pricing");
   const pricingPlans = visiblePricingPlans(subscriptionPlans);
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function LandingPage() {
               <Link href={createPlanHref}>
                 <Button className="bg-emerald-600 hover:bg-emerald-700">Tạo lộ trình phục hồi</Button>
               </Link>
-              <Link href="/exercises">
+              <Link href="/patient/exercises">
                 <Button className="bg-emerald-600 hover:bg-emerald-700">Xem bài tập</Button>
               </Link>
               <Link href={appointmentHref}>
@@ -182,7 +182,7 @@ export default function LandingPage() {
             <p className="text-sm font-bold uppercase text-emerald-700">Chuyên gia</p>
             <h2 className="mt-2 text-3xl font-bold text-slate-950">Đội ngũ y bác sĩ và chuyên gia phục hồi</h2>
           </div>
-          <Link href="/doctors" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-900">Xem bác sĩ <ArrowRight className="h-4 w-4" /></Link>
+          <Link href="/patient/doctors" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-900">Xem bác sĩ <ArrowRight className="h-4 w-4" /></Link>
         </div>
         {loadingHighlights ? <p className="mt-8 text-slate-500">Đang tải danh sách bác sĩ...</p> : null}
         {!loadingHighlights && !featuredDoctors.length ? <p className="mt-8 text-slate-500">Chưa có dữ liệu bác sĩ.</p> : null}
@@ -203,7 +203,7 @@ export default function LandingPage() {
                 <span className="inline-flex items-center gap-1"><Star className="h-4 w-4 fill-amber-400 text-amber-400" />{doctor.rating}</span>
               </div>
               <p className="mt-3 text-sm leading-6 text-slate-600">{doctor.bio}</p>
-              <Link href="/doctors" className="mt-5 inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">Xem bác sĩ</Link>
+              <Link href="/patient/doctors" className="mt-5 inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">Xem bác sĩ</Link>
             </Card>
           ))}
         </div>
@@ -216,7 +216,7 @@ export default function LandingPage() {
               <p className="text-sm font-bold uppercase text-emerald-700">Bài tập nổi bật</p>
               <h2 className="mt-2 text-3xl font-bold text-slate-950">Bắt đầu từ các bài tập nhẹ, dễ theo dõi</h2>
             </div>
-            <Link href="/exercises" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-900">Khám phá thư viện bài tập <ArrowRight className="h-4 w-4" /></Link>
+            <Link href="/patient/exercises" className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-900">Khám phá thư viện bài tập <ArrowRight className="h-4 w-4" /></Link>
           </div>
           {loadingHighlights ? <p className="mt-8 text-slate-500">Đang tải bài tập...</p> : null}
           {!loadingHighlights && !featuredExercises.length ? <p className="mt-8 text-slate-500">Chưa có dữ liệu bài tập.</p> : null}

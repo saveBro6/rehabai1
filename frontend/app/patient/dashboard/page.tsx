@@ -71,8 +71,8 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-slate-950">Tổng quan phục hồi</h1>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Link href={canUseRecoveryPlan ? "/recovery-plan" : "/pricing"}><Button>Tiếp tục tập luyện</Button></Link>
-          <Link href={canUseProgress ? "/progress" : "/pricing"}><Button variant="secondary">Ghi nhận tiến trình</Button></Link>
+          <Link href={canUseRecoveryPlan ? "/patient/recovery-plan" : "/patient/pricing"}><Button>Tiếp tục tập luyện</Button></Link>
+          <Link href={canUseProgress ? "/patient/progress" : "/patient/pricing"}><Button variant="secondary">Ghi nhận tiến trình</Button></Link>
         </div>
       </div>
       <div className="mt-8"><DashboardStats /></div>
@@ -92,12 +92,12 @@ export default function DashboardPage() {
             <>
               <p className="mt-4 text-3xl font-bold text-emerald-700">{progress?.latest_mobility_score || 0}</p>
               <p className="mt-2 text-sm text-slate-600">Khả năng cử động gần nhất · {progress?.completed_exercises || 0} bài đã hoàn thành</p>
-              <Link href="/progress"><Button variant="secondary" className="mt-5 w-full">Xem tiến trình</Button></Link>
+              <Link href="/patient/progress"><Button variant="secondary" className="mt-5 w-full">Xem tiến trình</Button></Link>
             </>
           ) : (
             <>
               <p className="mt-4 text-sm text-slate-600">Hãy mua gói Premium để theo dõi tiến trình phục hồi.</p>
-              <Link href="/pricing"><Button variant="secondary" className="mt-5 w-full">Nâng cấp gói</Button></Link>
+              <Link href="/patient/pricing"><Button variant="secondary" className="mt-5 w-full">Nâng cấp gói</Button></Link>
             </>
           )}
         </Card> 
@@ -113,7 +113,7 @@ export default function DashboardPage() {
           <h2 className="text-xl font-bold">Gói hiện tại</h2>
           <p className="mt-4 text-3xl font-bold text-emerald-700">{subscription?.subscription?.name || planName}</p>
           <p className="mt-2 text-sm text-slate-600">Trạng thái: {subscription?.status || "active"}</p>
-          <Link href="/pricing"><Button variant="secondary" className="mt-5 w-full">Quản lý gói</Button></Link>
+          <Link href="/patient/pricing"><Button variant="secondary" className="mt-5 w-full">Quản lý gói</Button></Link>
         </Card>
       </div>
       <div className="mt-10">
@@ -123,7 +123,7 @@ export default function DashboardPage() {
         ) : (
           <Card className="mt-4">
             <p className="text-sm text-slate-600">Hãy mua gói Basic hoặc cao hơn để truy cập Bài tập.</p>
-            <Link href="/pricing"><Button className="mt-4">Nâng cấp gói</Button></Link>
+            <Link href="/patient/pricing"><Button className="mt-4">Nâng cấp gói</Button></Link>
           </Card>
         )}
       </div>

@@ -42,7 +42,7 @@ export function RequireSubscription({ children, requiredPlan }: RequireSubscript
           <p className="mx-auto mt-3 max-w-xl text-slate-600">
             Bạn không thể truy cập tính năng này. Hãy mua gói {requiredPlan} hoặc cao hơn để có thể truy cập!
           </p>
-          <Link href="/pricing" className="mt-6 inline-flex">
+          <Link href="/patient/pricing" className="mt-6 inline-flex">
             <Button>Nâng cấp gói</Button>
           </Link>
         </Card>
