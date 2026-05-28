@@ -1,13 +1,20 @@
+# Dependencies and Builds
 node_modules/
 .next/
 out/
 dist/
 build/
-__pycache__/
-*.py[cod]
-.venv/
-venv/
+
+# Environment Variables and Secrets
 .env
 .env.local
+.env.*.local
+
+# System and Editor Files
 .DS_Store
 .vs/
+
+# Supabase Local Development
+.supabase/
+supabase/.temp/
+
