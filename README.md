@@ -21,7 +21,7 @@ supabase/   schema.sql, seed.sql, CLI config, and migrations
 
 ## Local Setup
 
-### 1. Supabase
+### 1. Supabase Remote
 
 1. Create a Supabase project.
 2. Install the Supabase CLI and log in.
@@ -41,7 +41,37 @@ supabase db push --include-seed
    - Project URL
    - Anon public key
 
-### 2. Frontend
+### 2. Supabase Local
+
+For local development, start Supabase from the `supabase` directory:
+
+```bash
+cd supabase
+supabase start
+supabase status
+```
+
+Copy the local API URL, anon key, and service role key from `supabase status` into `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-local-anon-key
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SECRET_KEY=your-local-service-role-key
+```
+
+`SUPABASE_SECRET_KEY` is only used by the local seed storage script. Do not expose it in browser code or deploy it as a public `NEXT_PUBLIC_` variable.
+
+To reset the local database and upload seed images to Supabase Storage:
+
+```bash
+cd frontend
+npm run db:reset
+```
+
+This command runs `supabase db reset`, creates the public `images` bucket from `supabase/seed.sql`, then uploads images from `supabase/seed_assets` using `frontend/seed-storage.js`. Seed images must be 5MB or smaller.
+
+### 3. Frontend
 
 ```bash
 cd frontend
@@ -56,6 +86,8 @@ Set these variables in `frontend/.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
+
+When using Supabase Local, use the local values shown by `supabase status` instead.
 
 The website runs at `http://localhost:3000`.
 
