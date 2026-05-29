@@ -42,7 +42,7 @@ async function collectImageFiles(dir) {
 
 function toStorageKey(filePath) {
   const relativePath = path.relative(SEED_ASSETS_DIR, filePath).split(path.sep).join("/");
-  return `images/${relativePath}`;
+  return relativePath;
 }
 
 async function uploadImage(supabase, filePath) {
