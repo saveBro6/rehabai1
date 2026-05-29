@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { RequireAuth } from "@/components/auth/RequireAuth";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
@@ -38,7 +38,7 @@ export default function CartPage() {
           {loading ? <p className="text-slate-500">Đang tải giỏ hàng...</p> : items.length ? items.map((item) => (
             <Card key={item.id} className="flex gap-4">
               <Image
-                src={item.product?.image_url || "/images/placeholders/rehab-equipment.jpg"}
+                src={getImageUrl(item.product?.image_url)}
                 alt={item.product?.name || "Sản phẩm"}
                 width={96}
                 height={96}

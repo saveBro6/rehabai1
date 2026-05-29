@@ -8,6 +8,7 @@ import { Card } from "@/components/Card";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscriptionAccess } from "@/hooks/useSubscriptionAccess";
 import { hasPlanAccess } from "@/lib/subscription-access";
+import { getImageUrl } from "@/lib/utils";
 import { useToast } from "@/hooks/useToast";
 import { createExerciseLog } from "@/services/progress.service";
 import type { Exercise } from "@/types";
@@ -42,7 +43,7 @@ export function ExerciseDetail({ exercise }: { exercise: Exercise }) {
     <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
       <div>
         <Image
-          src={exercise.image_url || "/images/placeholders/rehab-equipment.jpg"}
+          src={getImageUrl(exercise.image_url)}
           alt={exercise.title}
           width={1000}
           height={560}

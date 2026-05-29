@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { RequireAuth } from "@/components/auth/RequireAuth";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { addToCart as addCartItem } from "@/services/cart.service";
@@ -39,7 +39,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     <RequireAuth>
     <section className="mx-auto grid max-w-7xl gap-8 px-4 py-10 lg:grid-cols-2">
       <Image
-        src={product.image_url || "/images/placeholders/rehab-equipment.jpg"}
+        src={getImageUrl(product.image_url)}
         alt={product.name}
         width={1000}
         height={720}

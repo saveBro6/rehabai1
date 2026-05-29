@@ -7,7 +7,7 @@ import { AppointmentForm } from "@/components/AppointmentForm";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { Card } from "@/components/Card";
 import { getDoctorById } from "@/services/doctors.service";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getImageUrl } from "@/lib/utils";
 import type { Doctor } from "@/types";
 
 export default function DoctorDetailPage({ params }: { params: { id: string } }) {
@@ -24,7 +24,7 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
     <section className="mx-auto grid max-w-7xl gap-8 px-4 py-10 lg:grid-cols-[1fr_420px]">
       <div>
         <Image
-          src={doctor.avatar_url || "/images/placeholders/rehab-equipment.jpg"}
+          src={getImageUrl(doctor.avatar_url)}
           alt={doctor.full_name}
           width={1000}
           height={560}
