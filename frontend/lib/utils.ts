@@ -8,8 +8,11 @@ export function clsx(...values: Array<string | false | null | undefined>): strin
 
 export function getImageUrl(path: string | null | undefined, fallback = "/images/placeholders/rehab-equipment.jpg"): string {
   if (!path) return fallback;
-  if (path.startsWith("http")) return path;
-  if (path.startsWith("/")) return path;
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "http://127.0.0.1:54321";
-  return `${baseUrl}/storage/v1/object/public/${path}`;
+  const trimmedPath = path.trim();
+  if (trimmedPath.startsWith("http")) return trimmedPath;
+  if (trimmedPath.startsWith("/")) return trimmedPath;
+
+  const relativePath = trimmedPath.replace(/^images\/+/, "");
+  const baseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "http://127.0.0.1:54321").replace(/\/+$/, "");
+  return `${baseUrl}/storage/v1/object/public/images/${relativePath}`;
 }

@@ -26,6 +26,10 @@ export async function getUserProfile(userId: string) {
   assertNoSupabaseError(accountError);
   if (!account) return null;
 
+  if (account.account_type !== "patient") {
+    return mergeAccountPatient(account as Account, null);
+  }
+
   const { data: patient, error: patientError } = await supabase.from("patients").select("*").eq("id", userId).maybeSingle();
   assertNoSupabaseError(patientError);
   return mergeAccountPatient(account as Account, patient as Patient | null);
@@ -109,6 +113,7 @@ function mergeAccountPatient(account: Account, patient: Patient | null): User {
     medical_condition: patient?.medical_condition || undefined,
     gender: patient?.gender || undefined,
     must_change_password: account.must_change_password,
+    account_type: account.account_type,
     account_status: account.account_status,
     created_at: account.created_at
   };

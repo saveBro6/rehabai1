@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes, useMemo, useState } from "react";
+import Image from "next/image";
+import { FormEvent, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes, useEffect, useMemo, useState } from "react";
 import { CalendarPlus, Check, Eye, RotateCcw, X } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { getImageUrl } from "@/lib/utils";
 import { addMinutesToTime } from "@/services/doctor-schedules.service";
 import type {
   AppointmentStatus,
@@ -208,16 +210,36 @@ function DoctorListSection({ title, empty, children }: { title: string; empty: s
 export function DoctorProfileForm({
   doctor,
   loading,
-  onAvatarUpload,
+  reviewSubmitting = false,
+  onSubmitForReview,
   onSubmit
 }: {
   doctor: Doctor;
   loading: boolean;
-  onSubmit: (payload: Partial<Doctor>) => Promise<void>;
-  onAvatarUpload?: (file: File) => Promise<string>;
+  reviewSubmitting?: boolean;
+  onSubmitForReview?: () => Promise<void>;
+  onSubmit: (payload: Partial<Doctor>, avatarFile?: File | null) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(doctor);
-  const [uploading, setUploading] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(doctor);
+    setAvatarFile(null);
+    setAvatarPreviewUrl(null);
+  }, [doctor]);
+
+  useEffect(() => {
+    if (!avatarFile) return undefined;
+
+    const objectUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [avatarFile]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -228,32 +250,37 @@ export function DoctorProfileForm({
       bio: draft.bio,
       experience_years: Number(draft.experience_years) || 0,
       consultation_fee: Number(draft.consultation_fee) || 0
-    });
+    }, avatarFile);
   }
+
+  const avatarSrc = avatarPreviewUrl || getImageUrl(draft.avatar_url);
 
   return (
     <Card>
       <form onSubmit={submit} className="grid gap-4">
+        <DoctorPublicProfileReviewStatus doctor={doctor} loading={loading || reviewSubmitting} onSubmitForReview={onSubmitForReview} />
         <label className="grid gap-1.5">
           <span className="text-sm font-semibold text-slate-700">Upload ảnh đại diện</span>
+          <Image
+            alt="Doctor avatar preview"
+            className="h-28 w-28 rounded-lg border border-slate-200 object-cover"
+            height={112}
+            src={avatarSrc}
+            unoptimized
+            width={112}
+          />
           <input
             accept="image/*"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            disabled={!onAvatarUpload || uploading}
+            disabled={loading}
             type="file"
-            onChange={async (event) => {
+            onChange={(event) => {
               const file = event.target.files?.[0];
-              if (!file || !onAvatarUpload) return;
-              setUploading(true);
-              try {
-                const avatarUrl = await onAvatarUpload(file);
-                setDraft({ ...draft, avatar_url: avatarUrl });
-              } finally {
-                setUploading(false);
-              }
+              if (!file) return;
+              setAvatarFile(file);
             }}
           />
-          {uploading ? <span className="text-xs font-semibold text-emerald-700">Đang upload ảnh...</span> : null}
+          {avatarFile ? <span className="text-xs font-semibold text-emerald-700">Ảnh mới sẽ được upload khi bấm Lưu thay đổi.</span> : null}
         </label>
         <DoctorInput label="Ảnh đại diện" value={draft.avatar_url || ""} onChange={(value) => setDraft({ ...draft, avatar_url: value })} placeholder="URL ảnh hoặc đường dẫn storage" />
         <DoctorInput label="Họ tên" value={draft.full_name} onChange={(value) => setDraft({ ...draft, full_name: value })} required />
@@ -271,6 +298,57 @@ export function DoctorProfileForm({
         <Button disabled={loading}>{loading ? "Đang lưu..." : "Lưu thay đổi"}</Button>
       </form>
     </Card>
+  );
+}
+
+function DoctorPublicProfileReviewStatus({
+  doctor,
+  loading,
+  onSubmitForReview
+}: {
+  doctor: Doctor;
+  loading: boolean;
+  onSubmitForReview?: () => Promise<void>;
+}) {
+  const status = doctor.public_profile_status || "draft";
+  const canSubmitForReview = status === "draft" || status === "rejected";
+  const statusLabels = {
+    draft: "Bản nháp",
+    submitted: "Đang chờ duyệt",
+    approved: "Đã được duyệt",
+    rejected: "Bị từ chối"
+  };
+  const statusTone: Record<typeof status, "neutral" | "success" | "warning" | "danger"> = {
+    draft: "neutral",
+    submitted: "warning",
+    approved: "success",
+    rejected: "danger"
+  };
+
+  return (
+    <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div className="grid gap-2">
+          <p className="text-sm font-semibold text-slate-500">Trạng thái hồ sơ công khai</p>
+          <StatusBadge tone={statusTone[status]}>{statusLabels[status]}</StatusBadge>
+        </div>
+        {canSubmitForReview && onSubmitForReview ? (
+          <Button disabled={loading} onClick={onSubmitForReview} type="button">
+            {loading ? "Đang gửi..." : "Gửi duyệt hồ sơ công khai"}
+          </Button>
+        ) : null}
+      </div>
+      <div className="grid gap-1 text-sm text-slate-600">
+        {doctor.public_profile_submitted_at ? <p>Đã gửi: {formatDateTime(doctor.public_profile_submitted_at)}</p> : null}
+        {doctor.public_profile_reviewed_at ? <p>Đã duyệt/xem xét: {formatDateTime(doctor.public_profile_reviewed_at)}</p> : null}
+        {status === "approved" ? <p>Hồ sơ chỉ hiển thị công khai khi tài khoản vẫn active và chưa bị xóa.</p> : null}
+        {status === "submitted" ? <p>Hồ sơ đang chờ Admin xem xét. Bạn vẫn có thể lưu các thay đổi được phép trong workspace.</p> : null}
+        {status === "rejected" && doctor.public_profile_rejection_reason ? (
+          <p className="font-semibold text-rose-700">Lý do từ chối: {doctor.public_profile_rejection_reason}</p>
+        ) : null}
+        {status === "approved" ? <p>Thay đổi hồ sơ sau khi được duyệt chưa tự động mở lại quy trình duyệt trong task này.</p> : null}
+      </div>
+    </div>
   );
 }
 

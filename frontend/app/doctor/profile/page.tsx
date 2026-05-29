@@ -5,24 +5,40 @@ import { useState } from "react";
 import { DoctorProfileForm, ErrorState } from "@/components/doctor/DoctorComponents";
 import { useDoctor } from "@/components/doctor/DoctorLayout";
 import { useToast } from "@/hooks/useToast";
-import { updateDoctor, uploadDoctorAvatar } from "@/services/doctors.service";
+import { submitDoctorPublicProfile, updateDoctor, uploadDoctorAvatar } from "@/services/doctors.service";
 import type { Doctor } from "@/types";
 
 export default function DoctorProfilePage() {
   const { doctor, reloadDoctor } = useDoctor();
   const { pushToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
   const [error, setError] = useState("");
 
-  async function submit(payload: Partial<Doctor>) {
+  async function submit(payload: Partial<Doctor>, avatarFile?: File | null) {
     setLoading(true);
     setError("");
+    let uploadedAvatarPath: string | null = null;
+
     try {
-      await updateDoctor(doctor.id, payload);
+      const nextPayload = { ...payload };
+
+      if (avatarFile) {
+        uploadedAvatarPath = await uploadDoctorAvatar(doctor.id, avatarFile);
+        nextPayload.avatar_url = uploadedAvatarPath;
+      }
+
+      await updateDoctor(doctor.id, nextPayload);
       await reloadDoctor();
       pushToast("Đã lưu hồ sơ bác sĩ", "Thông tin hồ sơ đã được cập nhật.");
     } catch (saveError) {
-      const message = saveError instanceof Error ? saveError.message : "Không thể lưu hồ sơ bác sĩ.";
+      const baseMessage = saveError instanceof Error ? saveError.message : "Không thể lưu hồ sơ bác sĩ.";
+      const message = uploadedAvatarPath
+        ? `Ảnh đã upload thành công nhưng không thể lưu hồ sơ: ${baseMessage}`
+        : avatarFile
+          ? `Không thể upload ảnh đại diện: ${baseMessage}`
+          : baseMessage;
+
       setError(message);
       pushToast("Lưu hồ sơ thất bại", message);
     } finally {
@@ -30,15 +46,20 @@ export default function DoctorProfilePage() {
     }
   }
 
-  async function uploadAvatar(file: File) {
+  async function submitForReview() {
+    setSubmittingReview(true);
+    setError("");
+
     try {
-      const avatarUrl = await uploadDoctorAvatar(doctor.id, file);
-      pushToast("Đã upload ảnh đại diện", "Nhấn lưu thay đổi để cập nhật hồ sơ.");
-      return avatarUrl;
-    } catch (uploadError) {
-      const message = uploadError instanceof Error ? uploadError.message : "Không thể upload ảnh đại diện.";
-      pushToast("Upload ảnh thất bại", message);
-      throw uploadError;
+      await submitDoctorPublicProfile(doctor.id);
+      await reloadDoctor();
+      pushToast("Đã gửi hồ sơ để duyệt", "Admin sẽ xem xét hồ sơ công khai của bạn.");
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : "Không thể gửi hồ sơ để duyệt.";
+      setError(message);
+      pushToast("Gửi duyệt thất bại", message);
+    } finally {
+      setSubmittingReview(false);
     }
   }
 
@@ -49,7 +70,7 @@ export default function DoctorProfilePage() {
         <h1 className="text-3xl font-bold text-slate-950">Chỉnh sửa hồ sơ</h1>
       </div>
       {error ? <ErrorState message={error} /> : null}
-      <DoctorProfileForm doctor={doctor} loading={loading} onAvatarUpload={uploadAvatar} onSubmit={submit} />
+      <DoctorProfileForm doctor={doctor} loading={loading} reviewSubmitting={submittingReview} onSubmit={submit} onSubmitForReview={submitForReview} />
     </section>
   );
 }

@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { SidebarNavItem } from "@/components/layout/SidebarNavItem";
-import { sidebarItems } from "@/config/navigation";
+import { getSidebarItemsForAccountType } from "@/config/navigation";
 import { clsx } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -16,7 +16,8 @@ export type DynamicSidebarProps = {
 
 export function DynamicSidebar({ open, onClose }: DynamicSidebarProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading, profile } = useAuth();
+  const sidebarItems = isAuthenticated && !profile && isLoading ? [] : getSidebarItemsForAccountType(profile?.account_type);
 
   useEffect(() => {
     if (!open) return;

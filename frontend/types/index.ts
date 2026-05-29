@@ -3,6 +3,7 @@ export type AppointmentStatus = "pending" | "confirmed" | "completed" | "cancell
 export type PaymentStatus = "unpaid" | "paid" | "refunded";
 export type AccountStatus = "active" | "inactive" | "locked";
 export type DoctorScheduleStatus = "available" | "booked" | "blocked" | "cancelled";
+export type DoctorPublicProfileStatus = "draft" | "submitted" | "approved" | "rejected";
 export type ConsultationType = "online";
 export type ExerciseDifficulty = "beginner" | "intermediate" | "advanced" | "Cơ bản" | "Trung cấp" | "Nâng cao";
 export type PlanStatus = "active" | "paused" | "completed" | "cancelled";
@@ -31,6 +32,7 @@ export interface Patient {
 export interface User extends Patient {
   email: string;
   role: Role;
+  account_type: Account["account_type"];
   must_change_password?: boolean;
   account_status?: AccountStatus;
   created_at?: string;
@@ -47,6 +49,12 @@ export interface Doctor {
   rating: number;
   consultation_fee: number;
   available_online: boolean;
+  public_profile_status?: DoctorPublicProfileStatus;
+  public_profile_submitted_at?: string | null;
+  public_profile_reviewed_at?: string | null;
+  public_profile_reviewed_by?: string | null;
+  public_profile_rejection_reason?: string | null;
+  deleted_at?: string | null;
   created_at?: string;
 }
 

@@ -11,6 +11,7 @@ export const mockUser: User = {
   email: "an@example.com",
   phone: "0901000001",
   role: "patient",
+  account_type: "patient",
   date_of_birth: "1968-04-12",
   address: "Quan 7, TP.HCM",
   medical_condition: "Phuc hoi sau dot quy"

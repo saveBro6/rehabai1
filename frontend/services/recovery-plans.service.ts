@@ -22,7 +22,7 @@ export async function getRecoveryPlans(userId?: string) {
   const { data, error } = await query;
   assertNoSupabaseError(error);
 
-  return ((data || []) as RecoveryPlan[]).map((plan) => ({
+  return ((data || []) as unknown as RecoveryPlan[]).map((plan) => ({
     ...plan,
     exercises: sortPlanExercises(plan.exercises || [])
   }));
@@ -38,7 +38,7 @@ export async function getRecoveryPlanById(planId: string) {
   assertNoSupabaseError(error);
 
   if (!data) return null;
-  const plan = data as RecoveryPlan;
+  const plan = data as unknown as RecoveryPlan;
   return { ...plan, exercises: sortPlanExercises(plan.exercises || []) };
 }
 
@@ -92,5 +92,5 @@ export async function generateRecoveryPlanExercises(planId: string) {
     .insert(rows)
     .select("*, exercise:exercises(*)");
   assertNoSupabaseError(error);
-  return sortPlanExercises((data || []) as RecoveryPlanExercise[]);
+  return sortPlanExercises((data || []) as unknown as RecoveryPlanExercise[]);
 }

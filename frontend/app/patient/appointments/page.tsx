@@ -14,7 +14,7 @@ export default function AppointmentsPage() {
 
   useEffect(() => {
     if (isLoading || !user) return;
-    void getAppointments(user.id, profile?.role || "patient").then(setAppointments);
+    void getAppointments(user.id, profile?.account_type || "patient").then(setAppointments);
   }, [isLoading, profile, user]);
 
   return (

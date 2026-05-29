@@ -11,6 +11,7 @@ import { RequireAuth } from "@/components/auth/RequireAuth";
 import { ExerciseCard } from "@/components/exercises/ExerciseCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscriptionAccess } from "@/hooks/useSubscriptionAccess";
+import { getDashboardHref } from "@/config/navigation";
 import { hasPlanAccess } from "@/lib/subscription-access";
 import { getAppointments } from "@/services/appointments.service";
 import { getExercises } from "@/services/exercises.service";
@@ -29,22 +30,20 @@ export default function DashboardPage() {
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
 
   useEffect(() => {
-    if (profile?.role === "doctor") {
-      router.replace(profile.must_change_password ? "/doctor/change-password" : "/doctor/dashboard");
-    } else if (profile?.role === "admin") {
-      router.replace("/admin");
+    if (profile && profile.account_type !== "patient") {
+      router.replace(getDashboardHref(profile.account_type, profile.must_change_password));
     }
   }, [profile, router]);
 
   useEffect(() => {
-    if (isSubscriptionLoading || !user || profile?.role === "doctor" || profile?.role === "admin") return;
+    if (isSubscriptionLoading || !user || profile?.account_type !== "patient") return;
 
     const canUseExercises = hasPlanAccess(planName, "Basic");
     const canUseRecoveryPlan = hasPlanAccess(planName, "Standard");
     const canUseProgress = hasPlanAccess(planName, "Premium");
 
     void Promise.all([
-      getAppointments(user.id, profile?.role || "patient"),
+      getAppointments(user.id, profile?.account_type || "patient"),
       canUseExercises ? getExercises({ difficulty: "Cơ bản" }) : Promise.resolve([]),
       canUseRecoveryPlan ? getRecoveryPlans(user.id) : Promise.resolve([]),
       canUseProgress ? getProgressSummary(user.id) : Promise.resolve(null),

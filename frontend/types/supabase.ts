@@ -40,6 +40,12 @@ export type Database = {
         rating: number;
         consultation_fee: number;
         available_online: boolean;
+        public_profile_status: "draft" | "submitted" | "approved" | "rejected";
+        public_profile_submitted_at: string | null;
+        public_profile_reviewed_at: string | null;
+        public_profile_reviewed_by: string | null;
+        public_profile_rejection_reason: string | null;
+        deleted_at: string | null;
         created_at: string;
       }>;
       appointments: TableDefinition<{
@@ -202,7 +208,16 @@ export type Database = {
       }>;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      submit_doctor_public_profile: {
+        Args: { target_doctor_id: string };
+        Returns: Database["public"]["Tables"]["doctors"]["Row"];
+      };
+      review_doctor_public_profile: {
+        Args: { target_doctor_id: string; next_status: "approved" | "rejected"; rejection_reason?: string | null };
+        Returns: Database["public"]["Tables"]["doctors"]["Row"];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
