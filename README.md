@@ -56,7 +56,7 @@ Copy the local API URL, anon key, and service role key from `supabase status` in
 ```env
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-local-anon-key
-SUPABASE_URL=http://127.0.0.1:54321
+
 SUPABASE_SECRET_KEY=your-local-service-role-key
 ```
 
