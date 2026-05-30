@@ -217,6 +217,14 @@ export type Database = {
         Args: { target_doctor_id: string; next_status: "approved" | "rejected"; rejection_reason?: string | null };
         Returns: Database["public"]["Tables"]["doctors"]["Row"];
       };
+      checkout_patient_cart: {
+        Args: { p_shipping_address: string };
+        Returns: {
+          order_id: string;
+          total_amount: number;
+          item_count: number;
+        }[];
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

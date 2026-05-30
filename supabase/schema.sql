@@ -275,6 +275,7 @@ revoke all privileges on table public.exercise_logs from public, anon, authentic
 grant select, insert, update on public.accounts to authenticated;
 grant select, insert, update on public.patients to authenticated;
 grant select on public.doctors, public.products, public.subscriptions, public.exercises to anon, authenticated;
+grant select (id, account_type, account_status) on public.accounts to anon;
 grant select, insert, update, delete on public.appointments, public.cart_items, public.orders, public.order_items to authenticated;
 grant update (full_name, phone, date_of_birth, address, medical_condition, gender) on public.patients to authenticated;
 grant update (must_change_password) on public.accounts to authenticated;
@@ -295,6 +296,16 @@ on public.accounts
 for select
 to authenticated
 using (id = (select auth.uid()));
+
+drop policy if exists "Active doctor accounts are publicly readable" on public.accounts;
+create policy "Active doctor accounts are publicly readable"
+on public.accounts
+for select
+to anon, authenticated
+using (
+  account_type = 'doctor'
+  and account_status = 'active'
+);
 
 create policy "Accounts can update own password flag"
 on public.accounts
@@ -383,8 +394,9 @@ as $$
   );
 $$;
 
-revoke all on function public.is_active_doctor_account(uuid) from public, anon, authenticated;
-grant execute on function public.is_active_doctor_account(uuid) to anon, authenticated;
+revoke execute on function public.is_active_doctor_account(uuid) from public;
+revoke execute on function public.is_active_doctor_account(uuid) from anon;
+grant execute on function public.is_active_doctor_account(uuid) to authenticated;
 
 drop policy if exists "Doctors are publicly readable" on public.doctors;
 create policy "Doctors are publicly readable"
@@ -394,7 +406,285 @@ to anon, authenticated
 using (
   public_profile_status = 'approved'
   and deleted_at is null
-  and public.is_active_doctor_account(id)
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = public.doctors.id
+      and accounts.account_type = 'doctor'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Exercises are publicly readable" on public.exercises;
+create policy "Exercises are publicly readable"
+on public.exercises
+for select
+to anon, authenticated
+using (is_active is true);
+
+drop policy if exists "Products are publicly readable" on public.products;
+create policy "Products are publicly readable"
+on public.products
+for select
+to anon, authenticated
+using (
+  price >= 0
+  and stock_quantity >= 0
+);
+
+drop policy if exists "Users can manage own cart" on public.cart_items;
+drop policy if exists "Patients can manage own cart" on public.cart_items;
+create policy "Patients can manage own cart"
+on public.cart_items
+for all
+to authenticated
+using (
+  user_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+)
+with check (
+  user_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+  and exists (
+    select 1
+    from public.products
+    where products.id = cart_items.product_id
+      and products.stock_quantity >= cart_items.quantity
+  )
+);
+
+drop policy if exists "Users can manage own orders" on public.orders;
+drop policy if exists "Patients can manage own orders" on public.orders;
+create policy "Patients can manage own orders"
+on public.orders
+for all
+to authenticated
+using (
+  user_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+)
+with check (
+  user_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Users can manage own order items" on public.order_items;
+drop policy if exists "Patients can manage own order items" on public.order_items;
+create policy "Patients can manage own order items"
+on public.order_items
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.orders
+    join public.accounts on accounts.id = orders.user_id
+    where orders.id = order_items.order_id
+      and orders.user_id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.orders
+    join public.accounts on accounts.id = orders.user_id
+    where orders.id = order_items.order_id
+      and orders.user_id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+  and exists (
+    select 1
+    from public.products
+    where products.id = order_items.product_id
+      and products.stock_quantity >= order_items.quantity
+  )
+);
+
+create or replace function public.checkout_patient_cart(p_shipping_address text)
+returns table (
+  order_id uuid,
+  total_amount numeric,
+  item_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_account record;
+  v_cart_item_ids uuid[];
+  v_cart_row_count integer;
+  v_product_count integer;
+  v_updated_product_count integer;
+  v_total_amount numeric(12,2);
+  v_total_quantity integer;
+  v_order_id uuid;
+  v_shipping_address text;
+  v_product_name text;
+  v_available_quantity integer;
+  v_requested_quantity integer;
+begin
+  v_user_id := auth.uid();
+
+  if v_user_id is null then
+    raise exception 'Authentication is required to checkout.';
+  end if;
+
+  select account_type, account_status
+    into v_account
+  from public.accounts
+  where id = v_user_id;
+
+  if v_account.account_type is distinct from 'patient'
+     or v_account.account_status is distinct from 'active' then
+    raise exception 'Only active Patient accounts can checkout.';
+  end if;
+
+  v_shipping_address := nullif(btrim(p_shipping_address), '');
+  if v_shipping_address is null then
+    raise exception 'Shipping address is required.';
+  end if;
+
+  select array_agg(id order by product_id), count(*)::integer
+    into v_cart_item_ids, v_cart_row_count
+  from public.cart_items
+  where user_id = v_user_id;
+
+  if coalesce(v_cart_row_count, 0) = 0 then
+    raise exception 'Cart is empty.';
+  end if;
+
+  perform 1
+  from public.cart_items
+  where id = any(v_cart_item_ids)
+    and user_id = v_user_id
+  order by product_id
+  for update;
+
+  select count(*)::integer
+    into v_cart_row_count
+  from public.cart_items
+  where id = any(v_cart_item_ids)
+    and user_id = v_user_id;
+
+  if coalesce(v_cart_row_count, 0) = 0 then
+    raise exception 'Cart is empty.';
+  end if;
+
+  perform 1
+  from public.products
+  where id in (
+    select product_id
+    from public.cart_items
+    where id = any(v_cart_item_ids)
+      and user_id = v_user_id
+  )
+  order by id
+  for update;
+
+  select p.name, p.stock_quantity, ci.quantity
+    into v_product_name, v_available_quantity, v_requested_quantity
+  from public.cart_items ci
+  join public.products p on p.id = ci.product_id
+  where ci.id = any(v_cart_item_ids)
+    and ci.user_id = v_user_id
+    and p.stock_quantity < ci.quantity
+  order by p.id
+  limit 1;
+
+  if found then
+    raise exception 'Insufficient stock for %. Available: %, requested: %.',
+      v_product_name, v_available_quantity, v_requested_quantity;
+  end if;
+
+  select coalesce(sum(ci.quantity * p.price), 0)::numeric(12,2),
+         coalesce(sum(ci.quantity), 0)::integer
+    into v_total_amount, v_total_quantity
+  from public.cart_items ci
+  join public.products p on p.id = ci.product_id
+  where ci.id = any(v_cart_item_ids)
+    and ci.user_id = v_user_id;
+
+  insert into public.orders (user_id, total_amount, status, shipping_address)
+  values (v_user_id, v_total_amount, 'pending', v_shipping_address)
+  returning id into v_order_id;
+
+  insert into public.order_items (order_id, product_id, quantity, unit_price)
+  select v_order_id, ci.product_id, ci.quantity, p.price
+  from public.cart_items ci
+  join public.products p on p.id = ci.product_id
+  where ci.id = any(v_cart_item_ids)
+    and ci.user_id = v_user_id;
+
+  update public.products p
+  set stock_quantity = p.stock_quantity - ci.quantity
+  from public.cart_items ci
+  where ci.id = any(v_cart_item_ids)
+    and ci.user_id = v_user_id
+    and p.id = ci.product_id
+    and p.stock_quantity >= ci.quantity;
+
+  get diagnostics v_updated_product_count = row_count;
+
+  select count(distinct product_id)::integer
+    into v_product_count
+  from public.cart_items
+  where id = any(v_cart_item_ids)
+    and user_id = v_user_id;
+
+  if v_updated_product_count <> v_product_count then
+    raise exception 'Checkout failed because product stock changed. Please refresh your cart and try again.';
+  end if;
+
+  delete from public.cart_items
+  where id = any(v_cart_item_ids)
+    and user_id = v_user_id;
+
+  return query
+  select v_order_id, v_total_amount, v_total_quantity;
+end;
+$$;
+
+revoke execute on function public.checkout_patient_cart(text) from public;
+revoke execute on function public.checkout_patient_cart(text) from anon;
+grant execute on function public.checkout_patient_cart(text) to authenticated;
+
+drop policy if exists "Subscriptions are publicly readable" on public.subscriptions;
+create policy "Subscriptions are publicly readable"
+on public.subscriptions
+for select
+to anon, authenticated
+using (
+  name in ('Free', 'Basic', 'Standard', 'Premium')
+  and price >= 0
 );
 
 drop policy if exists "Doctors can update own profile row" on public.doctors;
@@ -454,7 +744,7 @@ create or replace function public.review_doctor_public_profile(
 returns public.doctors
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, auth
 as $$
 declare
   reviewer_id uuid := auth.uid();
@@ -500,8 +790,10 @@ begin
 end;
 $$;
 
-revoke all on function public.submit_doctor_public_profile(uuid) from public, anon, authenticated;
-revoke all on function public.review_doctor_public_profile(uuid, text, text) from public, anon, authenticated;
+revoke execute on function public.submit_doctor_public_profile(uuid) from public;
+revoke execute on function public.submit_doctor_public_profile(uuid) from anon;
+revoke execute on function public.review_doctor_public_profile(uuid, text, text) from public;
+revoke execute on function public.review_doctor_public_profile(uuid, text, text) from anon;
 grant execute on function public.submit_doctor_public_profile(uuid) to authenticated;
 grant execute on function public.review_doctor_public_profile(uuid, text, text) to authenticated;
 
@@ -605,7 +897,7 @@ create or replace function public.handle_new_auth_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = ''
+set search_path = public, auth
 as $$
 begin
   insert into public.accounts (id, email, account_type)
@@ -633,7 +925,9 @@ begin
 end;
 $$;
 
-revoke all on function public.handle_new_auth_user() from public, anon, authenticated;
+revoke execute on function public.handle_new_auth_user() from public;
+revoke execute on function public.handle_new_auth_user() from anon;
+revoke execute on function public.handle_new_auth_user() from authenticated;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created

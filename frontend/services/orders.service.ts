@@ -1,52 +1,20 @@
-import { getCartItems } from "@/services/cart.service";
 import { assertNoSupabaseError, getSupabase } from "@/services/common";
-import type { Product } from "@/types";
 
 export async function createOrderFromCart(userId: string, shippingAddress: string) {
   const supabase = getSupabase();
-  const cartItems = await getCartItems(userId);
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  assertNoSupabaseError(authError);
 
-  if (!cartItems.length) {
-    throw new Error("Cart is empty.");
+  if (!authData.user || authData.user.id !== userId) {
+    throw new Error("Authentication is required to checkout.");
   }
 
-  const productIds = cartItems.map((item) => item.product_id);
-  const { data: products, error: productsError } = await supabase.from("products").select("*").in("id", productIds);
-  assertNoSupabaseError(productsError);
-
-  const productMap = new Map((products || []).map((product) => [product.id, product as Product]));
-  const invalidItem = cartItems.find((item) => !productMap.has(item.product_id));
-  if (invalidItem) {
-    throw new Error("Cart contains an unavailable product.");
-  }
-
-  const totalAmount = cartItems.reduce((sum, item) => {
-    const product = productMap.get(item.product_id);
-    return sum + Number(product?.price || 0) * item.quantity;
-  }, 0);
-
-  const { data: order, error: orderError } = await supabase
-    .from("orders")
-    .insert({ user_id: userId, shipping_address: shippingAddress, total_amount: totalAmount, status: "paid" })
-    .select("*")
+  const { data, error } = await supabase
+    .rpc("checkout_patient_cart", { p_shipping_address: shippingAddress })
     .single();
-  assertNoSupabaseError(orderError);
-  if (!order) throw new Error("Could not create order.");
+  assertNoSupabaseError(error);
 
-  const orderItems = cartItems.map((item) => ({
-    order_id: order.id,
-    product_id: item.product_id,
-    quantity: item.quantity,
-    unit_price: Number(productMap.get(item.product_id)?.price || 0)
-  }));
-
-  const { data: createdItems, error: itemsError } = await supabase.from("order_items").insert(orderItems).select("*");
-  assertNoSupabaseError(itemsError);
-
-  const { error: clearError } = await supabase.from("cart_items").delete().eq("user_id", userId);
-  assertNoSupabaseError(clearError);
-
-  return { ...order, items: createdItems || [] };
+  return data;
 }
 
 export async function getOrders(userId: string) {
