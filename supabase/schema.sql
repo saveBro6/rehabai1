@@ -117,8 +117,12 @@ create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.patients(id) on delete cascade,
   total_amount numeric(12,2) not null default 0 check (total_amount >= 0),
-  status text not null default 'pending' check (status in ('pending', 'paid', 'cancelled')),
+  status text not null default 'pending' check (status in ('pending', 'confirmed', 'paid', 'cancelled')),
   shipping_address text,
+  cancelled_by uuid references public.accounts(id),
+  cancellation_reason text,
+  cancelled_at timestamptz,
+  cancellation_note text,
   created_at timestamptz not null default now()
 );
 
@@ -129,6 +133,30 @@ create table if not exists public.order_items (
   quantity int not null check (quantity > 0),
   unit_price numeric(12,2) not null check (unit_price >= 0),
   created_at timestamptz not null default now()
+);
+
+create table if not exists public.shipments (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  carrier_name text,
+  tracking_number text,
+  shipping_status text not null default 'not_started',
+  shipping_fee numeric(12,2) not null default 0 check (shipping_fee >= 0),
+  estimated_delivery_date date,
+  shipped_at timestamptz,
+  delivered_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  is_deleted boolean not null default false,
+  constraint shipments_order_id_unique unique (order_id),
+  constraint shipments_shipping_status_check check (
+    shipping_status in ('not_started', 'preparing', 'shipped', 'delivered', 'failed', 'returned', 'cancelled')
+  ),
+  constraint shipments_delivery_time_check check (
+    delivered_at is null
+    or shipped_at is null
+    or delivered_at >= shipped_at
+  )
 );
 
 create table if not exists public.subscriptions (
@@ -246,6 +274,7 @@ alter table public.products enable row level security;
 alter table public.cart_items enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
+alter table public.shipments enable row level security;
 alter table public.subscriptions enable row level security;
 alter table public.user_subscriptions enable row level security;
 alter table public.chatbot_messages enable row level security;
@@ -266,6 +295,7 @@ revoke all privileges on table public.products from public, anon, authenticated;
 revoke all privileges on table public.cart_items from public, anon, authenticated;
 revoke all privileges on table public.orders from public, anon, authenticated;
 revoke all privileges on table public.order_items from public, anon, authenticated;
+revoke all privileges on table public.shipments from public, anon, authenticated;
 revoke all privileges on table public.subscriptions from public, anon, authenticated;
 revoke all privileges on table public.user_subscriptions from public, anon, authenticated;
 revoke all privileges on table public.exercises from public, anon, authenticated;
@@ -277,6 +307,7 @@ grant select, insert, update on public.patients to authenticated;
 grant select on public.doctors, public.products, public.subscriptions, public.exercises to anon, authenticated;
 grant select (id, account_type, account_status) on public.accounts to anon;
 grant select, insert, update, delete on public.appointments, public.cart_items, public.orders, public.order_items to authenticated;
+grant select, insert, update on public.shipments to authenticated;
 grant update (full_name, phone, date_of_birth, address, medical_condition, gender) on public.patients to authenticated;
 grant update (must_change_password) on public.accounts to authenticated;
 grant select, insert, update, delete on public.doctor_schedule_slots to authenticated;
@@ -501,21 +532,12 @@ with check (
 
 drop policy if exists "Users can manage own orders" on public.orders;
 drop policy if exists "Patients can manage own orders" on public.orders;
-create policy "Patients can manage own orders"
+drop policy if exists "Patients can read own orders" on public.orders;
+create policy "Patients can read own orders"
 on public.orders
-for all
+for select
 to authenticated
 using (
-  user_id = (select auth.uid())
-  and exists (
-    select 1
-    from public.accounts
-    where accounts.id = (select auth.uid())
-      and accounts.account_type = 'patient'
-      and accounts.account_status = 'active'
-  )
-)
-with check (
   user_id = (select auth.uid())
   and exists (
     select 1
@@ -575,6 +597,66 @@ for select
 to authenticated
 using (public.is_active_admin_account((select auth.uid())));
 
+create index if not exists shipments_shipping_status_idx
+on public.shipments (shipping_status)
+where is_deleted = false;
+
+drop policy if exists "Patients can read own shipments" on public.shipments;
+create policy "Patients can read own shipments"
+on public.shipments
+for select
+to authenticated
+using (
+  is_deleted = false
+  and exists (
+    select 1
+    from public.orders
+    join public.accounts on accounts.id = orders.user_id
+    where orders.id = shipments.order_id
+      and orders.user_id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Admins can read shipments" on public.shipments;
+create policy "Admins can read shipments"
+on public.shipments
+for select
+to authenticated
+using (public.is_active_admin_account((select auth.uid())));
+
+drop policy if exists "Admins can insert shipments" on public.shipments;
+create policy "Admins can insert shipments"
+on public.shipments
+for insert
+to authenticated
+with check (
+  public.is_active_admin_account((select auth.uid()))
+  and exists (
+    select 1
+    from public.orders
+    where orders.id = shipments.order_id
+      and orders.status = 'confirmed'
+  )
+);
+
+drop policy if exists "Admins can update shipments" on public.shipments;
+create policy "Admins can update shipments"
+on public.shipments
+for update
+to authenticated
+using (public.is_active_admin_account((select auth.uid())))
+with check (
+  public.is_active_admin_account((select auth.uid()))
+  and exists (
+    select 1
+    from public.orders
+    where orders.id = shipments.order_id
+      and orders.status = 'confirmed'
+  )
+);
+
 create or replace function public.admin_update_order_status(target_order_id uuid, next_status text)
 returns public.orders
 language plpgsql
@@ -588,18 +670,36 @@ begin
     raise exception 'Only active admins can update order status.';
   end if;
 
-  if next_status not in ('pending', 'cancelled') then
-    raise exception 'Unsupported order status for mock order management.';
+  if next_status = 'cancelled' then
+    raise exception 'Cancellation requires a reason. Use admin_cancel_order.';
   end if;
 
-  update public.orders
-  set status = next_status
+  if next_status <> 'confirmed' then
+    raise exception 'Unsupported order status transition.';
+  end if;
+
+  select *
+    into v_order
+  from public.orders
   where id = target_order_id
-  returning * into v_order;
+  for update;
 
   if v_order.id is null then
     raise exception 'Order not found.';
   end if;
+
+  if v_order.status <> 'pending' then
+    raise exception 'Only pending orders can be confirmed.';
+  end if;
+
+  update public.orders
+  set status = 'confirmed',
+      cancelled_by = null,
+      cancellation_reason = null,
+      cancelled_at = null,
+      cancellation_note = null
+  where id = target_order_id
+  returning * into v_order;
 
   return v_order;
 end;
@@ -608,6 +708,156 @@ $$;
 revoke execute on function public.admin_update_order_status(uuid, text) from public;
 revoke execute on function public.admin_update_order_status(uuid, text) from anon;
 grant execute on function public.admin_update_order_status(uuid, text) to authenticated;
+
+create or replace function public.cancel_patient_order(target_order_id uuid, reason text)
+returns public.orders
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_account record;
+  v_order public.orders%rowtype;
+  v_reason text;
+begin
+  v_user_id := auth.uid();
+
+  if v_user_id is null then
+    raise exception 'Authentication is required to cancel an order.';
+  end if;
+
+  select account_type, account_status
+    into v_account
+  from public.accounts
+  where id = v_user_id;
+
+  if v_account.account_type is distinct from 'patient'
+     or v_account.account_status is distinct from 'active' then
+    raise exception 'Only active Patient accounts can cancel their own orders.';
+  end if;
+
+  v_reason := nullif(btrim(reason), '');
+  if v_reason is null then
+    raise exception 'Cancellation reason is required.';
+  end if;
+
+  select *
+    into v_order
+  from public.orders
+  where id = target_order_id
+    and user_id = v_user_id
+  for update;
+
+  if v_order.id is null then
+    raise exception 'Order not found.';
+  end if;
+
+  if v_order.status <> 'pending' then
+    raise exception 'Only pending orders can be cancelled.';
+  end if;
+
+  if exists (
+    select 1
+    from public.shipments
+    where shipments.order_id = target_order_id
+      and shipments.is_deleted = false
+      and shipments.shipping_status in ('shipped', 'delivered')
+  ) then
+    raise exception 'Orders that have shipped or delivered cannot be cancelled by Patient.';
+  end if;
+
+  update public.products p
+  set stock_quantity = p.stock_quantity + oi.quantity
+  from public.order_items oi
+  where oi.order_id = target_order_id
+    and oi.product_id = p.id;
+
+  update public.orders
+  set status = 'cancelled',
+      cancelled_by = v_user_id,
+      cancellation_reason = v_reason,
+      cancelled_at = now(),
+      cancellation_note = null
+  where id = target_order_id
+  returning * into v_order;
+
+  return v_order;
+end;
+$$;
+
+create or replace function public.admin_cancel_order(target_order_id uuid, reason text)
+returns public.orders
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_admin_id uuid;
+  v_order public.orders%rowtype;
+  v_reason text;
+begin
+  v_admin_id := auth.uid();
+
+  if not public.is_active_admin_account(v_admin_id) then
+    raise exception 'Only active admins can cancel orders.';
+  end if;
+
+  v_reason := nullif(btrim(reason), '');
+  if v_reason is null then
+    raise exception 'Cancellation reason is required.';
+  end if;
+
+  select *
+    into v_order
+  from public.orders
+  where id = target_order_id
+  for update;
+
+  if v_order.id is null then
+    raise exception 'Order not found.';
+  end if;
+
+  if v_order.status not in ('pending', 'confirmed') then
+    raise exception 'Only pending or confirmed orders can be cancelled.';
+  end if;
+
+  if exists (
+    select 1
+    from public.shipments
+    where shipments.order_id = target_order_id
+      and shipments.is_deleted = false
+      and shipments.shipping_status in ('shipped', 'delivered')
+  ) then
+    raise exception 'Orders that have shipped or delivered cannot be cancelled.';
+  end if;
+
+  update public.products p
+  set stock_quantity = p.stock_quantity + oi.quantity
+  from public.order_items oi
+  where oi.order_id = target_order_id
+    and oi.product_id = p.id;
+
+  update public.orders
+  set status = 'cancelled',
+      cancelled_by = v_admin_id,
+      cancellation_reason = v_reason,
+      cancelled_at = now(),
+      cancellation_note = null
+  where id = target_order_id
+  returning * into v_order;
+
+  return v_order;
+end;
+$$;
+
+revoke execute on function public.cancel_patient_order(uuid, text) from public;
+revoke execute on function public.cancel_patient_order(uuid, text) from anon;
+grant execute on function public.cancel_patient_order(uuid, text) to authenticated;
+
+revoke execute on function public.admin_cancel_order(uuid, text) from public;
+revoke execute on function public.admin_cancel_order(uuid, text) from anon;
+grant execute on function public.admin_cancel_order(uuid, text) to authenticated;
 
 create or replace function public.checkout_patient_cart(p_shipping_address text)
 returns table (

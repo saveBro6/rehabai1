@@ -12,14 +12,43 @@ export type OrderItemWithProduct = {
   product?: Pick<Product, "id" | "name" | "category" | "image_url" | "price"> | null;
 };
 
+export type ShippingStatus =
+  | "not_started"
+  | "preparing"
+  | "shipped"
+  | "delivered"
+  | "failed"
+  | "returned"
+  | "cancelled";
+
+export type Shipment = {
+  id: string;
+  order_id: string;
+  carrier_name: string | null;
+  tracking_number: string | null;
+  shipping_status: ShippingStatus;
+  shipping_fee: number;
+  estimated_delivery_date: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  created_at?: string;
+  updated_at?: string;
+  is_deleted: boolean;
+};
+
 export type OrderWithItems = {
   id: string;
   user_id: string;
   total_amount: number;
-  status: "pending" | "paid" | "cancelled";
+  status: "pending" | "confirmed" | "paid" | "cancelled";
   shipping_address: string | null;
+  cancelled_by: string | null;
+  cancellation_reason: string | null;
+  cancelled_at: string | null;
+  cancellation_note: string | null;
   created_at?: string;
   items?: OrderItemWithProduct[];
+  shipment?: Shipment | null;
 };
 
 export type AdminOrder = OrderWithItems & {
@@ -27,7 +56,7 @@ export type AdminOrder = OrderWithItems & {
   account?: Pick<Account, "id" | "email" | "account_status"> | null;
 };
 
-export type AdminOrderStatus = "pending" | "cancelled";
+export type AdminOrderStatus = "confirmed";
 export type CheckoutResult = {
   order_id: string;
   total_amount: number;
@@ -36,6 +65,7 @@ export type CheckoutResult = {
 
 type OrderRow = Row<"orders">;
 type OrderItemRow = Row<"order_items">;
+type ShipmentRow = Row<"shipments">;
 type ProductSummary = Pick<Product, "id" | "name" | "category" | "image_url" | "price">;
 type PatientSummary = Pick<Patient, "id" | "full_name" | "phone">;
 type AccountSummary = Pick<Account, "id" | "email" | "account_status">;
@@ -90,6 +120,34 @@ async function attachItemsToOrders(orders: OrderRow[]): Promise<OrderWithItems[]
   return orders.map((order) => ({
     ...order,
     items: itemsByOrderId.get(order.id) || []
+  }));
+}
+
+async function getShipmentsByOrderIds(orderIds: string[]) {
+  if (orderIds.length === 0) {
+    return new Map<string, Shipment>();
+  }
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("shipments")
+    .select("*")
+    .in("order_id", orderIds)
+    .eq("is_deleted", false);
+  assertNoSupabaseError(error);
+
+  return ((data || []) as ShipmentRow[]).reduce((shipmentsByOrderId, shipment) => {
+    shipmentsByOrderId.set(shipment.order_id, shipment as Shipment);
+    return shipmentsByOrderId;
+  }, new Map<string, Shipment>());
+}
+
+async function attachShipmentsToOrders(orders: OrderWithItems[]): Promise<OrderWithItems[]> {
+  const shipmentsByOrderId = await getShipmentsByOrderIds(orders.map((order) => order.id));
+
+  return orders.map((order) => ({
+    ...order,
+    shipment: shipmentsByOrderId.get(order.id) || null
   }));
 }
 
@@ -150,7 +208,8 @@ export async function getOrders(userId: string) {
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   assertNoSupabaseError(error);
-  return attachItemsToOrders((data || []) as OrderRow[]);
+  const orders = await attachItemsToOrders((data || []) as OrderRow[]);
+  return attachShipmentsToOrders(orders);
 }
 
 export async function getOrderById(orderId: string, userId: string) {
@@ -167,7 +226,8 @@ export async function getOrderById(orderId: string, userId: string) {
     return null;
   }
 
-  const [order] = await attachItemsToOrders([data as OrderRow]);
+  const [orderWithItems] = await attachItemsToOrders([data as OrderRow]);
+  const [order] = await attachShipmentsToOrders([orderWithItems]);
   return order;
 }
 
@@ -179,7 +239,7 @@ export async function getAdminOrders() {
     .order("created_at", { ascending: false });
   assertNoSupabaseError(error);
 
-  const orders = await attachItemsToOrders((data || []) as OrderRow[]);
+  const orders = await attachShipmentsToOrders(await attachItemsToOrders((data || []) as OrderRow[]));
   return attachCustomerInfoToOrders(orders);
 }
 
@@ -196,7 +256,8 @@ export async function getAdminOrderById(orderId: string) {
     return null;
   }
 
-  const [order] = await attachItemsToOrders([data as OrderRow]);
+  const [orderWithItems] = await attachItemsToOrders([data as OrderRow]);
+  const [order] = await attachShipmentsToOrders([orderWithItems]);
   const [adminOrder] = await attachCustomerInfoToOrders([order]);
   return adminOrder;
 }
@@ -208,4 +269,62 @@ export async function updateAdminOrderStatus(orderId: string, status: AdminOrder
     .single();
   assertNoSupabaseError(error);
   return data;
+}
+
+export async function confirmAdminOrder(orderId: string) {
+  const row = await updateAdminOrderStatus(orderId, "confirmed");
+  return row as unknown as AdminOrder;
+}
+
+export async function cancelPatientOrder(orderId: string, reason: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .rpc("cancel_patient_order", { target_order_id: orderId, reason })
+    .single();
+  assertNoSupabaseError(error);
+  return data as unknown as OrderWithItems;
+}
+
+export async function cancelAdminOrder(orderId: string, reason: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .rpc("admin_cancel_order", { target_order_id: orderId, reason })
+    .single();
+  assertNoSupabaseError(error);
+  return data as unknown as AdminOrder;
+}
+
+export type AdminShipmentInput = {
+  carrier_name?: string | null;
+  tracking_number?: string | null;
+  shipping_status: ShippingStatus;
+  shipping_fee?: number | null;
+  estimated_delivery_date?: string | null;
+  shipped_at?: string | null;
+  delivered_at?: string | null;
+};
+
+export async function upsertAdminShipment(orderId: string, shipment: AdminShipmentInput) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("shipments")
+    .upsert(
+      {
+        order_id: orderId,
+        carrier_name: shipment.carrier_name || null,
+        tracking_number: shipment.tracking_number || null,
+        shipping_status: shipment.shipping_status,
+        shipping_fee: shipment.shipping_fee ?? 0,
+        estimated_delivery_date: shipment.estimated_delivery_date || null,
+        shipped_at: shipment.shipped_at || null,
+        delivered_at: shipment.delivered_at || null,
+        updated_at: new Date().toISOString(),
+        is_deleted: false
+      },
+      { onConflict: "order_id" }
+    )
+    .select("*")
+    .single();
+  assertNoSupabaseError(error);
+  return data as Shipment;
 }

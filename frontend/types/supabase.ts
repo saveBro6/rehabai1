@@ -115,8 +115,12 @@ export type Database = {
         id: string;
         user_id: string;
         total_amount: number;
-        status: "pending" | "paid" | "cancelled";
+        status: "pending" | "confirmed" | "paid" | "cancelled";
         shipping_address: string | null;
+        cancelled_by: string | null;
+        cancellation_reason: string | null;
+        cancelled_at: string | null;
+        cancellation_note: string | null;
         created_at: string;
       }>;
       order_items: TableDefinition<{
@@ -126,6 +130,20 @@ export type Database = {
         quantity: number;
         unit_price: number;
         created_at: string;
+      }>;
+      shipments: TableDefinition<{
+        id: string;
+        order_id: string;
+        carrier_name: string | null;
+        tracking_number: string | null;
+        shipping_status: "not_started" | "preparing" | "shipped" | "delivered" | "failed" | "returned" | "cancelled";
+        shipping_fee: number;
+        estimated_delivery_date: string | null;
+        shipped_at: string | null;
+        delivered_at: string | null;
+        created_at: string;
+        updated_at: string;
+        is_deleted: boolean;
       }>;
       subscriptions: TableDefinition<{
         id: string;
@@ -226,7 +244,15 @@ export type Database = {
         }[];
       };
       admin_update_order_status: {
-        Args: { target_order_id: string; next_status: "pending" | "cancelled" };
+        Args: { target_order_id: string; next_status: "confirmed" };
+        Returns: Database["public"]["Tables"]["orders"]["Row"];
+      };
+      cancel_patient_order: {
+        Args: { target_order_id: string; reason: string };
+        Returns: Database["public"]["Tables"]["orders"]["Row"];
+      };
+      admin_cancel_order: {
+        Args: { target_order_id: string; reason: string };
         Returns: Database["public"]["Tables"]["orders"]["Row"];
       };
     };
