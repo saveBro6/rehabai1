@@ -225,6 +225,10 @@ export type Database = {
           item_count: number;
         }[];
       };
+      admin_update_order_status: {
+        Args: { target_order_id: string; next_status: "pending" | "cancelled" };
+        Returns: Database["public"]["Tables"]["orders"]["Row"];
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

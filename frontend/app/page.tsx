@@ -115,6 +115,9 @@ export default function LandingPage() {
               <Link href="/patient/exercises">
                 <Button className="bg-emerald-600 hover:bg-emerald-700">Xem bài tập</Button>
               </Link>
+              <Link href="/patient/products">
+                <Button className="bg-emerald-600 hover:bg-emerald-700">Xem sản phẩm</Button>
+              </Link>
               <Link href={appointmentHref}>
                 <Button className="bg-emerald-600 hover:bg-emerald-700">Tư vấn với bác sĩ</Button>
               </Link>

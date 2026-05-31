@@ -53,15 +53,15 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
         <div className="flex items-center gap-1 sm:gap-2">
           {!isLoading && isAuthenticated ? (
             <Link href={dashboardHref} className="hidden min-h-10 items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 md:inline-flex">
-              Dashboard
+              Tổng quan
             </Link>
           ) : null}
           {cartHref ? (
-            <Link href={cartHref} aria-label="Gio hang" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">
+            <Link href={cartHref} aria-label="Giỏ hàng" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">
               <ShoppingCart className="h-5 w-5" />
             </Link>
           ) : null}
-          <Link href={profileHref} aria-label="Ho so" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">
+          <Link href={profileHref} aria-label="Hồ sơ" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">
             <UserRound className="h-5 w-5" />
           </Link>
           {!isLoading && isAuthenticated ? (
@@ -82,11 +82,11 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           {!isLoading && !isAuthenticated ? (
             <>
               <Link href="/login" className="hidden min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 sm:inline-flex">
-                Dang nhap
+                Đăng nhập
               </Link>
               <Link
                 href="/login"
-                aria-label="Dang nhap"
+                aria-label="Đăng nhập"
                 className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 sm:hidden"
               >
                 <LogIn className="h-5 w-5" />

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -11,15 +12,14 @@ import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { removeCartItem, updateCartItem } from "@/services/cart.service";
-import { createOrderFromCart } from "@/services/orders.service";
 
 export default function CartPage() {
-  const { profile, user } = useAuth();
+  const router = useRouter();
+  const { profile } = useAuth();
   const { items, total, loading, refresh } = useCart();
   const { pushToast } = useToast();
-  const [address, setAddress] = useState("Quan 7, TP.HCM");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const isPatientBuyer = profile?.account_type === "patient";
+  const isPatientBuyer = profile?.account_type === "patient" && profile?.account_status === "active";
 
   async function changeQuantity(cartItemId: string, nextQuantity: number) {
     if (nextQuantity < 1) return;
@@ -50,35 +50,18 @@ export default function CartPage() {
     }
   }
 
-  async function checkout() {
+  function continueToCheckout() {
     if (!isPatientBuyer) {
-      pushToast("Chi Benh nhan moi co the checkout", "Tai khoan Bac si va Admin khong phai buyer role trong MVP.");
+      pushToast("Chi Benh nhan moi co the thanh toan", "Tai khoan Bac si va Admin khong phai buyer role trong MVP.");
       return;
     }
 
     if (!items.length) {
-      pushToast("Gio hang trong. Vui long them san pham truoc khi checkout.");
+      pushToast("Gio hang trong. Vui long them san pham truoc khi thanh toan.");
       return;
     }
 
-    if (!address.trim()) {
-      pushToast("Can nhap dia chi giao hang.");
-      return;
-    }
-
-    if (!user) return;
-
-    setPendingAction("checkout");
-    try {
-      await createOrderFromCart(user.id, address.trim());
-      pushToast("Da tao don hang mo phong.", "Trang thai don hang la pending; chua co thanh toan that hoac gateway-confirmed paid.");
-      await refresh();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Vui long thu lai sau.";
-      pushToast("Checkout that bai", message);
-    } finally {
-      setPendingAction(null);
-    }
+    router.push("/patient/checkout");
   }
 
   return (
@@ -89,7 +72,7 @@ export default function CartPage() {
           {!isPatientBuyer ? (
             <Card className="mt-6 border-amber-200 bg-amber-50">
               <p className="font-semibold text-amber-800">Tai khoan nay chi duoc xem san pham.</p>
-              <p className="mt-2 text-sm text-amber-700">Chi Benh nhan moi co the mua hang va checkout trong MVP.</p>
+              <p className="mt-2 text-sm text-amber-700">Chi Benh nhan active moi co the mua hang va checkout trong MVP.</p>
             </Card>
           ) : null}
           <div className="mt-6 grid gap-4">
@@ -155,24 +138,20 @@ export default function CartPage() {
           </div>
         </div>
         <Card className="h-fit">
-          <h2 className="text-xl font-bold">Mock checkout</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            Flow nay chi tao don hang mo phong. Khong co thanh toan that va khong co gateway-confirmed paid.
-          </p>
+          <h2 className="text-xl font-bold">Tong gio hang</h2>
+          <p className="mt-2 text-sm text-slate-600">Kiem tra lai san pham truoc khi sang buoc thanh toan mo phong.</p>
           <p className="mt-4 text-sm text-slate-600">Tong tam tinh</p>
           <p className="mt-1 text-3xl font-bold text-emerald-700">{formatCurrency(total)}</p>
-          <textarea
-            className="mt-5 min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2"
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-          />
           <Button
             className="mt-4 w-full"
-            onClick={checkout}
-            disabled={pendingAction === "checkout" || !isPatientBuyer}
+            onClick={continueToCheckout}
+            disabled={loading || !items.length || !isPatientBuyer}
           >
-            {pendingAction === "checkout" ? "Dang tao don..." : "Tao don hang mo phong"}
+            Tiếp tục thanh toán
           </Button>
+          <p className="mt-3 text-xs text-slate-500">
+            Thanh toan chi duoc thuc hien boi tai khoan Benh nhan. Don hang se o trang thai pending/mock.
+          </p>
         </Card>
       </section>
     </RequireAuth>

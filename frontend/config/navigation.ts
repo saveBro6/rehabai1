@@ -29,49 +29,55 @@ export type SidebarItem = {
 
 export const patientSidebarItems: SidebarItem[] = [
   {
-    label: "Dashboard",
+    label: "Tổng quan",
     href: "/patient/dashboard",
     icon: LayoutDashboard,
     requiresAuth: true
   },
   {
-    label: "Bac si",
+    label: "Bác sĩ",
     href: "/patient/doctors",
     icon: Stethoscope,
     requiresAuth: false
   },
   {
-    label: "Lich hen",
+    label: "Lịch hẹn",
     href: "/patient/appointments",
     icon: CalendarCheck,
     requiresAuth: true
   },
   {
-    label: "Bai tap",
+    label: "Bài tập",
     href: "/patient/exercises",
     icon: Dumbbell,
     requiresAuth: false
   },
   {
-    label: "Lo trinh",
+    label: "Lộ trình",
     href: "/patient/recovery-plan",
     icon: Route,
     requiresAuth: true
   },
   {
-    label: "Tien trinh",
+    label: "Tiến trình",
     href: "/patient/progress",
     icon: TrendingUp,
     requiresAuth: true
   },
   {
-    label: "San pham",
+    label: "Sản phẩm",
     href: "/patient/products",
     icon: ShoppingBag,
     requiresAuth: false
   },
   {
-    label: "Bang gia",
+    label: "Đơn hàng",
+    href: "/patient/orders",
+    icon: FileText,
+    requiresAuth: true
+  },
+  {
+    label: "Bảng giá",
     href: "/patient/pricing",
     icon: CreditCard,
     requiresAuth: false
@@ -79,17 +85,18 @@ export const patientSidebarItems: SidebarItem[] = [
 ];
 
 export const doctorSidebarItems: SidebarItem[] = [
-  { label: "Tong quan", href: "/doctor/dashboard", icon: LayoutDashboard, requiresAuth: true },
-  { label: "Lich hen", href: "/doctor/appointments", icon: CalendarCheck, requiresAuth: true },
-  { label: "Lich ranh", href: "/doctor/schedules", icon: CalendarClock, requiresAuth: true },
-  { label: "Benh nhan cua toi", href: "/doctor/patients", icon: Users, requiresAuth: true },
-  { label: "Ghi chu tu van", href: "/doctor/notes", icon: FileText, requiresAuth: true },
-  { label: "Ho so bac si", href: "/doctor/profile", icon: Stethoscope, requiresAuth: true },
-  { label: "Thong bao", href: "/doctor/notifications", icon: Bell, requiresAuth: true }
+  { label: "Tổng quan", href: "/doctor/dashboard", icon: LayoutDashboard, requiresAuth: true },
+  { label: "Lịch hẹn", href: "/doctor/appointments", icon: CalendarCheck, requiresAuth: true },
+  { label: "Lịch rảnh", href: "/doctor/schedules", icon: CalendarClock, requiresAuth: true },
+  { label: "Bệnh nhân của tôi", href: "/doctor/patients", icon: Users, requiresAuth: true },
+  { label: "Ghi chú tư vấn", href: "/doctor/notes", icon: FileText, requiresAuth: true },
+  { label: "Hồ sơ bác sĩ", href: "/doctor/profile", icon: Stethoscope, requiresAuth: true },
+  { label: "Thông báo", href: "/doctor/notifications", icon: Bell, requiresAuth: true }
 ];
 
 export const adminSidebarItems: SidebarItem[] = [
-  { label: "Admin dashboard", href: "/admin", icon: ShieldCheck, requiresAuth: true }
+  { label: "Tổng quan", href: "/admin", icon: ShieldCheck, requiresAuth: true },
+  { label: "Đơn hàng", href: "/admin/orders", icon: FileText, requiresAuth: true }
 ];
 
 export function getSidebarItemsForAccountType(accountType?: AccountType | null): SidebarItem[] {
@@ -115,28 +122,30 @@ export function getCartHref(accountType?: AccountType | null) {
 }
 
 export const pageTitles: Record<string, string> = {
-  "/": "Trang chu",
-  "/admin": "Quan tri",
-  "/doctor": "Doctor",
-  "/doctor/dashboard": "Doctor dashboard",
-  "/doctor/appointments": "Lich hen bac si",
-  "/doctor/schedules": "Lich ranh",
-  "/doctor/patients": "Benh nhan",
-  "/doctor/notes": "Ghi chu",
-  "/doctor/profile": "Ho so bac si",
-  "/doctor/notifications": "Thong bao",
-  "/patient/dashboard": "Dashboard",
-  "/patient/doctors": "Bac si",
-  "/patient/appointments": "Lich hen",
-  "/patient/exercises": "Bai tap",
-  "/patient/recovery-plan": "Lo trinh",
-  "/patient/progress": "Tien trinh",
-  "/patient/products": "San pham",
-  "/patient/pricing": "Bang gia",
-  "/patient/profile": "Ho so",
-  "/patient/cart": "Gio hang",
-  "/login": "Dang nhap",
-  "/patient/register": "Dang ky"
+  "/": "Trang chủ",
+  "/admin": "Quản trị",
+  "/admin/orders": "Quản lý đơn hàng",
+  "/doctor": "Bác sĩ",
+  "/doctor/dashboard": "Tổng quan bác sĩ",
+  "/doctor/appointments": "Lịch hẹn bác sĩ",
+  "/doctor/schedules": "Lịch rảnh",
+  "/doctor/patients": "Bệnh nhân",
+  "/doctor/notes": "Ghi chú",
+  "/doctor/profile": "Hồ sơ bác sĩ",
+  "/doctor/notifications": "Thông báo",
+  "/patient/dashboard": "Tổng quan",
+  "/patient/doctors": "Bác sĩ",
+  "/patient/appointments": "Lịch hẹn",
+  "/patient/exercises": "Bài tập",
+  "/patient/recovery-plan": "Lộ trình",
+  "/patient/progress": "Tiến trình",
+  "/patient/products": "Sản phẩm",
+  "/patient/orders": "Đơn hàng",
+  "/patient/pricing": "Bảng giá",
+  "/patient/profile": "Hồ sơ",
+  "/patient/cart": "Giỏ hàng",
+  "/login": "Đăng nhập",
+  "/patient/register": "Đăng ký"
 };
 
 export function getPageTitle(pathname: string): string {

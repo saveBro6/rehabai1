@@ -15,7 +15,7 @@ export function RequireAdmin({ children }: { children: React.ReactNode }) {
     <RequireAuth>
       {isLoading ? (
         <section className="mx-auto max-w-7xl px-4 py-10 text-slate-500">Đang kiểm tra quyền quản trị...</section>
-      ) : profile?.account_type === "admin" ? (
+      ) : profile?.account_type === "admin" && profile.account_status === "active" ? (
         children
       ) : (
         <section className="mx-auto max-w-3xl px-4 py-16">
