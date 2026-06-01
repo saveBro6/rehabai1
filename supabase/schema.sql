@@ -306,6 +306,7 @@ grant select, insert, update on public.accounts to authenticated;
 grant select, insert, update on public.patients to authenticated;
 grant select on public.doctors, public.products, public.subscriptions, public.exercises to anon, authenticated;
 grant select (id, account_type, account_status) on public.accounts to anon;
+grant insert, update on public.products to authenticated;
 grant select, insert, update, delete on public.appointments, public.cart_items, public.orders, public.order_items to authenticated;
 grant select, insert, update on public.shipments to authenticated;
 grant update (full_name, phone, date_of_birth, address, medical_condition, gender) on public.patients to authenticated;
@@ -496,6 +497,29 @@ using (
   price >= 0
   and stock_quantity >= 0
 );
+
+drop policy if exists "Admins can manage products" on public.products;
+drop policy if exists "Active admins can read products" on public.products;
+create policy "Active admins can read products"
+on public.products
+for select
+to authenticated
+using (public.is_active_admin_account((select auth.uid())));
+
+drop policy if exists "Active admins can create products" on public.products;
+create policy "Active admins can create products"
+on public.products
+for insert
+to authenticated
+with check (public.is_active_admin_account((select auth.uid())));
+
+drop policy if exists "Active admins can update products" on public.products;
+create policy "Active admins can update products"
+on public.products
+for update
+to authenticated
+using (public.is_active_admin_account((select auth.uid())))
+with check (public.is_active_admin_account((select auth.uid())));
 
 drop policy if exists "Users can manage own cart" on public.cart_items;
 drop policy if exists "Patients can manage own cart" on public.cart_items;

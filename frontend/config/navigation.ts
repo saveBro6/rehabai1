@@ -95,6 +95,7 @@ export const doctorSidebarItems: SidebarItem[] = [
 ];
 
 export const adminSidebarItems: SidebarItem[] = [
+  { label: "Sản phẩm", href: "/admin/products", icon: ShoppingBag, requiresAuth: true },
   { label: "Tổng quan", href: "/admin", icon: ShieldCheck, requiresAuth: true },
   { label: "Đơn hàng", href: "/admin/orders", icon: FileText, requiresAuth: true }
 ];
@@ -122,6 +123,7 @@ export function getCartHref(accountType?: AccountType | null) {
 }
 
 export const pageTitles: Record<string, string> = {
+  "/admin/products": "Quản lý sản phẩm",
   "/": "Trang chủ",
   "/admin": "Quản trị",
   "/admin/orders": "Quản lý đơn hàng",
