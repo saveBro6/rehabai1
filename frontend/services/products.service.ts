@@ -1,4 +1,9 @@
 import { assertNoSupabaseError, getSupabase } from "@/services/common";
+import {
+  ensureProductCategory,
+  getAdminProductCategoryNames,
+  getPublicProductCategoryNames
+} from "@/services/product-categories.service";
 import type { Product } from "@/types";
 
 export type ProductMutationPayload = {
@@ -23,15 +28,14 @@ const IMAGE_EXTENSION_BY_TYPE: Record<string, string> = {
   "image/avif": "avif"
 };
 
-function uniqueSorted(values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort((a, b) =>
-    a.localeCompare(b, "vi")
-  );
-}
-
 export async function getProducts(filters?: { category?: string; recommended?: boolean }) {
   const supabase = getSupabase();
-  let query = supabase.from("products").select("*").order("created_at", { ascending: false });
+  let query = supabase
+    .from("products")
+    .select("*")
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
 
   if (filters?.category) query = query.eq("category", filters.category);
   if (filters?.recommended !== undefined) query = query.eq("is_recommended", filters.recommended);
@@ -42,22 +46,81 @@ export async function getProducts(filters?: { category?: string; recommended?: b
 }
 
 export async function getProductCategories() {
-  const supabase = getSupabase();
-  const { data, error } = await supabase.from("products").select("category").order("category", { ascending: true });
-  assertNoSupabaseError(error);
+  return getPublicProductCategoryNames();
+}
 
-  return uniqueSorted((data || []).map((row) => row.category));
+export async function getAdminProductCategories() {
+  return getAdminProductCategoryNames();
 }
 
 export async function getProductById(id: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("id", id)
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .maybeSingle();
+  assertNoSupabaseError(error);
+  return data as Product | null;
+}
+
+export async function getRelatedProducts(productId: string, category: string, limit = 6) {
+  const supabase = getSupabase();
+  const baseSelect = "*";
+  const [categoryResult, recommendedResult] = await Promise.all([
+    supabase
+      .from("products")
+      .select(baseSelect)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .eq("category", category)
+      .neq("id", productId)
+      .order("is_recommended", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    supabase
+      .from("products")
+      .select(baseSelect)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .eq("is_recommended", true)
+      .neq("id", productId)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+  ]);
+
+  assertNoSupabaseError(categoryResult.error);
+  assertNoSupabaseError(recommendedResult.error);
+
+  const merged = [...(categoryResult.data || []), ...(recommendedResult.data || [])] as Product[];
+  return Array.from(new Map(merged.map((product) => [product.id, product])).values()).slice(0, limit);
+}
+
+export async function getAdminProducts() {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false });
+  assertNoSupabaseError(error);
+  return (data || []) as Product[];
+}
+
+export async function getAdminProductById(id: string) {
   const supabase = getSupabase();
   const { data, error } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
   assertNoSupabaseError(error);
   return data as Product | null;
 }
 
-export async function getAdminProducts() {
-  return getProducts();
+export async function getProductsByIds(productIds: string[]) {
+  if (productIds.length === 0) {
+    return [] as Product[];
+  }
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("products").select("*").in("id", productIds);
+  assertNoSupabaseError(error);
+  return (data || []) as Product[];
 }
 
 export async function uploadProductImage(file: File) {
@@ -82,15 +145,43 @@ export async function uploadProductImage(file: File) {
 }
 
 export async function createProduct(payload: ProductMutationPayload) {
+  await ensureProductCategory(payload.category);
   const supabase = getSupabase();
-  const { data, error } = await supabase.from("products").insert(payload).select("*").single();
+  const { data, error } = await supabase
+    .from("products")
+    .insert({ ...payload, is_active: true, deleted_at: null, updated_at: new Date().toISOString() })
+    .select("*")
+    .single();
   assertNoSupabaseError(error);
   return data as Product;
 }
 
 export async function updateProduct(id: string, payload: Partial<ProductMutationPayload>) {
+  if (payload.category) {
+    await ensureProductCategory(payload.category);
+  }
+
   const supabase = getSupabase();
-  const { data, error } = await supabase.from("products").update(payload).eq("id", id).select("*").single();
+  const { data, error } = await supabase
+    .from("products")
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("*")
+    .single();
+  assertNoSupabaseError(error);
+  return data as Product;
+}
+
+export async function setProductActive(id: string, isActive: boolean) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("products")
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("*")
+    .single();
   assertNoSupabaseError(error);
   return data as Product;
 }

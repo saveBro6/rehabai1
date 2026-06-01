@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { getCartItems } from "@/services/cart.service";
-import { getProducts } from "@/services/products.service";
+import { getProductsByIds } from "@/services/products.service";
 import type { CartItem, Product } from "@/types";
 
 export function useCart() {
@@ -22,7 +22,8 @@ export function useCart() {
     }
 
     setLoading(true);
-    const [cartItems, productItems] = await Promise.all([getCartItems(user.id), getProducts()]);
+    const cartItems = await getCartItems(user.id);
+    const productItems = await getProductsByIds(cartItems.map((item) => item.product_id));
     setItems(cartItems);
     setProducts(productItems);
     setLoading(false);

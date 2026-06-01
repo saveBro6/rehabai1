@@ -101,7 +101,23 @@ create table if not exists public.products (
   image_url text,
   stock_quantity int not null default 0 check (stock_quantity >= 0),
   is_recommended boolean not null default false,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  is_active boolean not null default true,
+  deleted_at timestamptz,
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.product_categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  is_active boolean not null default true,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint product_categories_name_not_blank check (length(btrim(name)) > 0),
+  constraint product_categories_slug_not_blank check (length(btrim(slug)) > 0)
 );
 
 create table if not exists public.cart_items (
@@ -255,6 +271,12 @@ create index if not exists idx_doctor_schedule_slots_doctor_date on public.docto
 create index if not exists idx_doctor_notes_doctor_created on public.doctor_notes (doctor_id, created_at desc);
 create index if not exists idx_notifications_account_created on public.notifications (account_id, created_at desc);
 create index if not exists idx_products_category on public.products (category);
+create index if not exists idx_products_public_visibility on public.products (is_active, deleted_at, created_at desc);
+create unique index if not exists product_categories_name_unique_active
+on public.product_categories (lower(name))
+where deleted_at is null;
+create index if not exists product_categories_public_idx
+on public.product_categories (is_active, deleted_at, sort_order, name);
 create index if not exists idx_user_subscriptions_user on public.user_subscriptions (user_id);
 create index if not exists idx_chatbot_messages_user_created on public.chatbot_messages (user_id, created_at desc);
 create index if not exists idx_exercises_category on public.exercises (category);
@@ -271,6 +293,7 @@ alter table public.doctor_schedule_slots enable row level security;
 alter table public.doctor_notes enable row level security;
 alter table public.notifications enable row level security;
 alter table public.products enable row level security;
+alter table public.product_categories enable row level security;
 alter table public.cart_items enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
@@ -304,11 +327,12 @@ revoke all privileges on table public.recovery_plan_exercises from public, anon,
 revoke all privileges on table public.exercise_logs from public, anon, authenticated;
 grant select, insert, update on public.accounts to authenticated;
 grant select, insert, update on public.patients to authenticated;
-grant select on public.doctors, public.products, public.subscriptions, public.exercises to anon, authenticated;
+grant select on public.doctors, public.products, public.product_categories, public.subscriptions, public.exercises to anon, authenticated;
 grant select (id, account_type, account_status) on public.accounts to anon;
 grant insert, update on public.products to authenticated;
+grant insert, update, delete on public.product_categories to authenticated;
 grant select, insert, update, delete on public.appointments, public.cart_items, public.orders, public.order_items to authenticated;
-grant select, insert, update on public.shipments to authenticated;
+grant select on public.shipments to authenticated;
 grant update (full_name, phone, date_of_birth, address, medical_condition, gender) on public.patients to authenticated;
 grant update (must_change_password) on public.accounts to authenticated;
 grant select, insert, update, delete on public.doctor_schedule_slots to authenticated;
@@ -494,8 +518,40 @@ on public.products
 for select
 to anon, authenticated
 using (
-  price >= 0
+  is_active is true
+  and deleted_at is null
+  and price >= 0
   and stock_quantity >= 0
+);
+
+drop policy if exists "Patients can read own cart and order products" on public.products;
+create policy "Patients can read own cart and order products"
+on public.products
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+  and (
+    exists (
+      select 1
+      from public.cart_items
+      where cart_items.product_id = products.id
+        and cart_items.user_id = (select auth.uid())
+    )
+    or exists (
+      select 1
+      from public.order_items
+      join public.orders on orders.id = order_items.order_id
+      where order_items.product_id = products.id
+        and orders.user_id = (select auth.uid())
+    )
+  )
 );
 
 drop policy if exists "Admins can manage products" on public.products;
@@ -521,8 +577,69 @@ to authenticated
 using (public.is_active_admin_account((select auth.uid())))
 with check (public.is_active_admin_account((select auth.uid())));
 
+drop policy if exists "Public can read active product categories" on public.product_categories;
+create policy "Public can read active product categories"
+on public.product_categories
+for select
+to anon, authenticated
+using (is_active is true and deleted_at is null);
+
+drop policy if exists "Active admins can read product categories" on public.product_categories;
+create policy "Active admins can read product categories"
+on public.product_categories
+for select
+to authenticated
+using (public.is_active_admin_account((select auth.uid())));
+
+drop policy if exists "Active admins can create product categories" on public.product_categories;
+create policy "Active admins can create product categories"
+on public.product_categories
+for insert
+to authenticated
+with check (public.is_active_admin_account((select auth.uid())));
+
+drop policy if exists "Active admins can update product categories" on public.product_categories;
+create policy "Active admins can update product categories"
+on public.product_categories
+for update
+to authenticated
+using (public.is_active_admin_account((select auth.uid())))
+with check (public.is_active_admin_account((select auth.uid())));
+
+drop policy if exists "Active admins can delete product categories" on public.product_categories;
+create policy "Active admins can delete product categories"
+on public.product_categories
+for delete
+to authenticated
+using (public.is_active_admin_account((select auth.uid())));
+
 drop policy if exists "Users can manage own cart" on public.cart_items;
 drop policy if exists "Patients can manage own cart" on public.cart_items;
+create or replace function public.is_product_available_for_cart(
+  target_product_id uuid,
+  requested_quantity integer
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.products
+    where products.id = target_product_id
+      and products.is_active is true
+      and products.deleted_at is null
+      and products.stock_quantity >= requested_quantity
+      and products.stock_quantity > 0
+  );
+$$;
+
+revoke execute on function public.is_product_available_for_cart(uuid, integer) from public;
+revoke execute on function public.is_product_available_for_cart(uuid, integer) from anon;
+grant execute on function public.is_product_available_for_cart(uuid, integer) to authenticated;
+
 create policy "Patients can manage own cart"
 on public.cart_items
 for all
@@ -546,12 +663,7 @@ with check (
       and accounts.account_type = 'patient'
       and accounts.account_status = 'active'
   )
-  and exists (
-    select 1
-    from public.products
-    where products.id = cart_items.product_id
-      and products.stock_quantity >= cart_items.quantity
-  )
+  and public.is_product_available_for_cart(product_id, quantity)
 );
 
 drop policy if exists "Users can manage own orders" on public.orders;
@@ -610,6 +722,8 @@ with check (
     select 1
     from public.products
     where products.id = order_items.product_id
+      and products.is_active is true
+      and products.deleted_at is null
       and products.stock_quantity >= order_items.quantity
   )
 );
@@ -883,6 +997,267 @@ revoke execute on function public.admin_cancel_order(uuid, text) from public;
 revoke execute on function public.admin_cancel_order(uuid, text) from anon;
 grant execute on function public.admin_cancel_order(uuid, text) to authenticated;
 
+create or replace function public.admin_update_shipment_details(
+  target_order_id uuid,
+  p_carrier_name text default null,
+  p_tracking_number text default null,
+  p_shipping_fee numeric default 0,
+  p_estimated_delivery_date date default null
+)
+returns public.shipments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.orders%rowtype;
+  v_shipment public.shipments%rowtype;
+  v_shipping_fee numeric;
+begin
+  if not public.is_active_admin_account((select auth.uid())) then
+    raise exception 'Only active admins can update shipment details.';
+  end if;
+
+  select *
+    into v_order
+  from public.orders
+  where id = target_order_id
+  for update;
+
+  if v_order.id is null then
+    raise exception 'Order not found.';
+  end if;
+
+  if v_order.status <> 'confirmed' then
+    raise exception 'Shipment details can be updated only after the order is confirmed.';
+  end if;
+
+  v_shipping_fee := coalesce(p_shipping_fee, 0);
+  if v_shipping_fee < 0 then
+    raise exception 'Shipping fee must be non-negative.';
+  end if;
+
+  select *
+    into v_shipment
+  from public.shipments
+  where order_id = target_order_id
+    and is_deleted = false
+  for update;
+
+  if v_shipment.id is not null and v_shipment.shipping_status in ('shipped', 'delivered') then
+    raise exception 'Shipment details cannot be edited after handoff or delivery.';
+  end if;
+
+  if v_shipment.id is null then
+    insert into public.shipments (
+      order_id,
+      carrier_name,
+      tracking_number,
+      shipping_status,
+      shipping_fee,
+      estimated_delivery_date,
+      updated_at,
+      is_deleted
+    )
+    values (
+      target_order_id,
+      nullif(btrim(p_carrier_name), ''),
+      nullif(btrim(p_tracking_number), ''),
+      'not_started',
+      v_shipping_fee,
+      p_estimated_delivery_date,
+      now(),
+      false
+    )
+    returning * into v_shipment;
+  else
+    update public.shipments
+    set carrier_name = nullif(btrim(p_carrier_name), ''),
+        tracking_number = nullif(btrim(p_tracking_number), ''),
+        shipping_fee = v_shipping_fee,
+        estimated_delivery_date = p_estimated_delivery_date,
+        updated_at = now()
+    where id = v_shipment.id
+    returning * into v_shipment;
+  end if;
+
+  return v_shipment;
+end;
+$$;
+
+create or replace function public.admin_transition_shipment(
+  target_order_id uuid,
+  next_status text
+)
+returns public.shipments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order public.orders%rowtype;
+  v_shipment public.shipments%rowtype;
+begin
+  if not public.is_active_admin_account((select auth.uid())) then
+    raise exception 'Only active admins can update shipment status.';
+  end if;
+
+  if next_status not in ('preparing', 'shipped') then
+    raise exception 'Unsupported shipment transition.';
+  end if;
+
+  select *
+    into v_order
+  from public.orders
+  where id = target_order_id
+  for update;
+
+  if v_order.id is null then
+    raise exception 'Order not found.';
+  end if;
+
+  if v_order.status <> 'confirmed' then
+    raise exception 'Shipment can progress only after the order is confirmed.';
+  end if;
+
+  select *
+    into v_shipment
+  from public.shipments
+  where order_id = target_order_id
+    and is_deleted = false
+  for update;
+
+  if next_status = 'preparing' then
+    if v_shipment.id is null then
+      insert into public.shipments (
+        order_id,
+        shipping_status,
+        updated_at,
+        is_deleted
+      )
+      values (
+        target_order_id,
+        'preparing',
+        now(),
+        false
+      )
+      returning * into v_shipment;
+    elsif v_shipment.shipping_status = 'not_started' then
+      update public.shipments
+      set shipping_status = 'preparing',
+          updated_at = now()
+      where id = v_shipment.id
+      returning * into v_shipment;
+    elsif v_shipment.shipping_status <> 'preparing' then
+      raise exception 'Only not_started shipments can move to preparing.';
+    end if;
+
+    return v_shipment;
+  end if;
+
+  if next_status = 'shipped' then
+    if v_shipment.id is null then
+      raise exception 'Shipment must be prepared before handoff.';
+    end if;
+
+    if v_shipment.shipping_status <> 'preparing' then
+      raise exception 'Only preparing shipments can move to shipped.';
+    end if;
+
+    update public.shipments
+    set shipping_status = 'shipped',
+        shipped_at = coalesce(shipped_at, now()),
+        delivered_at = null,
+        updated_at = now()
+    where id = v_shipment.id
+    returning * into v_shipment;
+
+    return v_shipment;
+  end if;
+
+  raise exception 'Unsupported shipment transition.';
+end;
+$$;
+
+create or replace function public.confirm_patient_order_received(target_order_id uuid)
+returns public.shipments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_patient_id uuid;
+  v_order public.orders%rowtype;
+  v_shipment public.shipments%rowtype;
+begin
+  v_patient_id := auth.uid();
+
+  if not exists (
+    select 1
+    from public.accounts
+    where id = v_patient_id
+      and account_type = 'patient'
+      and account_status = 'active'
+  ) then
+    raise exception 'Only active patients can confirm delivery.';
+  end if;
+
+  select *
+    into v_order
+  from public.orders
+  where id = target_order_id
+  for update;
+
+  if v_order.id is null then
+    raise exception 'Order not found.';
+  end if;
+
+  if v_order.user_id <> v_patient_id then
+    raise exception 'Patients can confirm only their own orders.';
+  end if;
+
+  if v_order.status <> 'confirmed' then
+    raise exception 'Only confirmed orders can be marked received.';
+  end if;
+
+  select *
+    into v_shipment
+  from public.shipments
+  where order_id = target_order_id
+    and is_deleted = false
+  for update;
+
+  if v_shipment.id is null then
+    raise exception 'Shipment not found.';
+  end if;
+
+  if v_shipment.shipping_status <> 'shipped' then
+    raise exception 'Only shipped orders can be confirmed as received.';
+  end if;
+
+  update public.shipments
+  set shipping_status = 'delivered',
+      delivered_at = now(),
+      updated_at = now()
+  where id = v_shipment.id
+  returning * into v_shipment;
+
+  return v_shipment;
+end;
+$$;
+
+revoke execute on function public.admin_update_shipment_details(uuid, text, text, numeric, date) from public;
+revoke execute on function public.admin_update_shipment_details(uuid, text, text, numeric, date) from anon;
+grant execute on function public.admin_update_shipment_details(uuid, text, text, numeric, date) to authenticated;
+
+revoke execute on function public.admin_transition_shipment(uuid, text) from public;
+revoke execute on function public.admin_transition_shipment(uuid, text) from anon;
+grant execute on function public.admin_transition_shipment(uuid, text) to authenticated;
+
+revoke execute on function public.confirm_patient_order_received(uuid) from public;
+revoke execute on function public.confirm_patient_order_received(uuid) from anon;
+grant execute on function public.confirm_patient_order_received(uuid) to authenticated;
+
 create or replace function public.checkout_patient_cart(p_shipping_address text)
 returns table (
   order_id uuid,
@@ -966,6 +1341,23 @@ begin
   order by id
   for update;
 
+  select p.name
+    into v_product_name
+  from public.cart_items ci
+  join public.products p on p.id = ci.product_id
+  where ci.id = any(v_cart_item_ids)
+    and ci.user_id = v_user_id
+    and (
+      p.is_active is not true
+      or p.deleted_at is not null
+    )
+  order by p.id
+  limit 1;
+
+  if found then
+    raise exception 'Product % is no longer available for sale.', v_product_name;
+  end if;
+
   select p.name, p.stock_quantity, ci.quantity
     into v_product_name, v_available_quantity, v_requested_quantity
   from public.cart_items ci
@@ -987,7 +1379,9 @@ begin
   from public.cart_items ci
   join public.products p on p.id = ci.product_id
   where ci.id = any(v_cart_item_ids)
-    and ci.user_id = v_user_id;
+    and ci.user_id = v_user_id
+    and p.is_active is true
+    and p.deleted_at is null;
 
   insert into public.orders (user_id, total_amount, status, shipping_address)
   values (v_user_id, v_total_amount, 'pending', v_shipping_address)
@@ -998,14 +1392,19 @@ begin
   from public.cart_items ci
   join public.products p on p.id = ci.product_id
   where ci.id = any(v_cart_item_ids)
-    and ci.user_id = v_user_id;
+    and ci.user_id = v_user_id
+    and p.is_active is true
+    and p.deleted_at is null;
 
   update public.products p
-  set stock_quantity = p.stock_quantity - ci.quantity
+  set stock_quantity = p.stock_quantity - ci.quantity,
+      updated_at = now()
   from public.cart_items ci
   where ci.id = any(v_cart_item_ids)
     and ci.user_id = v_user_id
     and p.id = ci.product_id
+    and p.is_active is true
+    and p.deleted_at is null
     and p.stock_quantity >= ci.quantity;
 
   get diagnostics v_updated_product_count = row_count;
@@ -1017,7 +1416,7 @@ begin
     and user_id = v_user_id;
 
   if v_updated_product_count <> v_product_count then
-    raise exception 'Checkout failed because product stock changed. Please refresh your cart and try again.';
+    raise exception 'Checkout failed because product availability or stock changed. Please refresh your cart and try again.';
   end if;
 
   delete from public.cart_items

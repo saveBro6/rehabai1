@@ -129,6 +129,20 @@ export interface Product {
   stock_quantity: number;
   is_recommended: boolean;
   created_at?: string;
+  is_active?: boolean;
+  deleted_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string | null;
+  deleted_at?: string | null;
 }
 
 export interface CartItem {

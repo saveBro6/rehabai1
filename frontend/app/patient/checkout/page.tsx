@@ -12,6 +12,13 @@ import { RequireAuth } from "@/components/auth/RequireAuth";
 import { useAuth } from "@/hooks/useAuth";
 import { useCart } from "@/hooks/useCart";
 import { useToast } from "@/hooks/useToast";
+import {
+  STOCK_CHECKOUT_BLOCK_MESSAGE,
+  getCartStockWarning,
+  getProductStockBadgeClass,
+  getProductStockDetail,
+  getProductStockLabel
+} from "@/lib/product-stock";
 import { composeShippingAddress, type DeliveryAddressForm } from "@/lib/shipping-address";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { createOrderFromCart } from "@/services/orders.service";
@@ -48,6 +55,14 @@ export default function PatientCheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const isActivePatient = profile?.account_type === "patient" && profile?.account_status === "active";
   const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
+  const stockWarnings = useMemo(
+    () =>
+      items
+        .map((item) => getCartStockWarning(item.product, item.quantity))
+        .filter(Boolean),
+    [items]
+  );
+  const hasStockIssue = stockWarnings.length > 0;
   const isLoading = isAuthLoading || isCartLoading;
 
   function updateDeliveryField(field: keyof DeliveryAddressForm, value: string) {
@@ -82,6 +97,11 @@ export default function PatientCheckoutPage() {
       return;
     }
 
+    if (hasStockIssue) {
+      pushToast("Kh\u00f4ng th\u1ec3 thanh to\u00e1n", STOCK_CHECKOUT_BLOCK_MESSAGE);
+      return;
+    }
+
     if (!validateDeliveryAddress()) {
       return;
     }
@@ -102,7 +122,10 @@ export default function PatientCheckoutPage() {
         router.push("/patient/orders");
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Vui lòng thử lại sau.";
+      const rawMessage = error instanceof Error ? error.message : "Vui lòng thử lại sau.";
+      const message = /insufficient stock|product stock changed|availability|no longer available|available|requested/i.test(rawMessage)
+        ? STOCK_CHECKOUT_BLOCK_MESSAGE
+        : rawMessage;
       pushToast("Thanh toán mô phỏng thất bại", message);
     } finally {
       setSubmitting(false);
@@ -140,6 +163,8 @@ export default function PatientCheckoutPage() {
             ) : items.length ? (
               items.map((item) => {
                 const subtotal = (item.product?.price || 0) * item.quantity;
+                const stock = item.product?.stock_quantity || 0;
+                const stockWarning = getCartStockWarning(item.product, item.quantity);
                 return (
                   <Card key={item.id} className="flex flex-col gap-4 sm:flex-row">
                     <Image
@@ -152,6 +177,17 @@ export default function PatientCheckoutPage() {
                     <div className="flex-1">
                       <p className="font-bold text-slate-950">{item.product?.name || "Sản phẩm"}</p>
                       <p className="mt-1 text-sm text-slate-600">Số lượng: {item.quantity}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${getProductStockBadgeClass(stock)}`}>
+                          {getProductStockLabel(stock)}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-500">{getProductStockDetail(stock)}</span>
+                      </div>
+                      {stockWarning ? (
+                        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                          {stockWarning}
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-sm text-slate-600">
                         Đơn giá: {formatCurrency(item.product?.price || 0)}
                       </p>
@@ -285,10 +321,16 @@ export default function PatientCheckoutPage() {
               </div>
             </div>
 
+            {hasStockIssue ? (
+              <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                {STOCK_CHECKOUT_BLOCK_MESSAGE}
+              </div>
+            ) : null}
+
             <Button
               type="submit"
               className="mt-5 w-full"
-              disabled={submitting || isLoading || !items.length || !isActivePatient}
+              disabled={submitting || isLoading || !items.length || !isActivePatient || hasStockIssue}
             >
               {submitting ? "Đang tạo đơn..." : "Xác nhận thanh toán mô phỏng"}
             </Button>

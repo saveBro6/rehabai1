@@ -103,6 +103,19 @@ export type Database = {
         stock_quantity: number;
         is_recommended: boolean;
         created_at: string;
+        is_active: boolean;
+        deleted_at: string | null;
+        updated_at: string | null;
+      }>;
+      product_categories: TableDefinition<{
+        id: string;
+        name: string;
+        slug: string;
+        is_active: boolean;
+        sort_order: number;
+        created_at: string;
+        updated_at: string;
+        deleted_at: string | null;
       }>;
       cart_items: TableDefinition<{
         id: string;
@@ -254,6 +267,24 @@ export type Database = {
       admin_cancel_order: {
         Args: { target_order_id: string; reason: string };
         Returns: Database["public"]["Tables"]["orders"]["Row"];
+      };
+      admin_update_shipment_details: {
+        Args: {
+          target_order_id: string;
+          p_carrier_name?: string | null;
+          p_tracking_number?: string | null;
+          p_shipping_fee?: number | null;
+          p_estimated_delivery_date?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["shipments"]["Row"];
+      };
+      admin_transition_shipment: {
+        Args: { target_order_id: string; next_status: "preparing" | "shipped" };
+        Returns: Database["public"]["Tables"]["shipments"]["Row"];
+      };
+      confirm_patient_order_received: {
+        Args: { target_order_id: string };
+        Returns: Database["public"]["Tables"]["shipments"]["Row"];
       };
     };
     Enums: Record<string, never>;

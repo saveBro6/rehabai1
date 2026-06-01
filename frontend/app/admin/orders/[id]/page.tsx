@@ -15,21 +15,12 @@ import {
   cancelAdminOrder,
   confirmAdminOrder,
   getAdminOrderById,
-  upsertAdminShipment,
+  transitionAdminShipment,
+  updateAdminShipmentDetails,
   type AdminOrder,
   type Shipment,
   type ShippingStatus
 } from "@/services/orders.service";
-
-const shippingStatusOptions: Array<{ value: ShippingStatus; label: string }> = [
-  { value: "not_started", label: "Chưa bắt đầu giao" },
-  { value: "preparing", label: "Đang chuẩn bị" },
-  { value: "shipped", label: "Đang giao" },
-  { value: "delivered", label: "Đã giao" },
-  { value: "failed", label: "Giao thất bại" },
-  { value: "returned", label: "Đã hoàn trả" },
-  { value: "cancelled", label: "Đã hủy" }
-];
 
 const adminCancellationReasons = [
   "Hết hàng",
@@ -42,11 +33,8 @@ const adminCancellationReasons = [
 type ShipmentFormState = {
   carrier_name: string;
   tracking_number: string;
-  shipping_status: ShippingStatus;
   shipping_fee: string;
   estimated_delivery_date: string;
-  shipped_at: string;
-  delivered_at: string;
 };
 
 function formatDate(value?: string | null) {
@@ -54,16 +42,9 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-function formatDateTimeLocal(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return localDate.toISOString().slice(0, 16);
-}
-
-function toIsoDateTime(value: string) {
-  return value ? new Date(value).toISOString() : null;
+function formatDateOnly(value?: string | null) {
+  if (!value) return "Chưa rõ";
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(value));
 }
 
 function getStatusLabel(status: AdminOrder["status"]) {
@@ -74,24 +55,44 @@ function getStatusLabel(status: AdminOrder["status"]) {
   return status;
 }
 
+function getShippingStatusLabel(status?: ShippingStatus) {
+  if (status === "not_started") return "Chưa bắt đầu giao";
+  if (status === "preparing") return "Đang chuẩn bị";
+  if (status === "shipped") return "Đang giao";
+  if (status === "delivered") return "Đã giao";
+  if (status === "failed") return "Giao thất bại";
+  if (status === "returned") return "Đã hoàn trả";
+  if (status === "cancelled") return "Đã hủy";
+  return "Chưa có thông tin";
+}
+
 function getShipmentFormState(shipment?: Shipment | null): ShipmentFormState {
   return {
     carrier_name: shipment?.carrier_name || "",
     tracking_number: shipment?.tracking_number || "",
-    shipping_status: shipment?.shipping_status || "not_started",
     shipping_fee: shipment ? String(Number(shipment.shipping_fee || 0)) : "0",
-    estimated_delivery_date: shipment?.estimated_delivery_date || "",
-    shipped_at: formatDateTimeLocal(shipment?.shipped_at),
-    delivered_at: formatDateTimeLocal(shipment?.delivered_at)
+    estimated_delivery_date: shipment?.estimated_delivery_date || ""
   };
 }
 
-function canAdminCancel(order: AdminOrder) {
-  return ["pending", "confirmed"].includes(order.status) && !["shipped", "delivered"].includes(order.shipment?.shipping_status || "");
+function getShipmentStatus(order: AdminOrder) {
+  return order.shipment?.shipping_status;
 }
 
-function canManageShipment(order: AdminOrder) {
-  return order.status === "confirmed";
+function canAdminCancel(order: AdminOrder) {
+  return ["pending", "confirmed"].includes(order.status) && !["shipped", "delivered"].includes(getShipmentStatus(order) || "");
+}
+
+function canEditShipmentDetails(order: AdminOrder) {
+  return order.status === "confirmed" && !["shipped", "delivered"].includes(getShipmentStatus(order) || "");
+}
+
+function canStartPreparation(order: AdminOrder) {
+  return order.status === "confirmed" && (!order.shipment || getShipmentStatus(order) === "not_started");
+}
+
+function canHandOverToCarrier(order: AdminOrder) {
+  return order.status === "confirmed" && getShipmentStatus(order) === "preparing";
 }
 
 function buildCancellationReason(reason: string, customReason: string) {
@@ -104,12 +105,20 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [updatingShipment, setUpdatingShipment] = useState(false);
+  const [transitioningShipment, setTransitioningShipment] = useState<"preparing" | "shipped" | null>(null);
   const [shipmentForm, setShipmentForm] = useState<ShipmentFormState>(() => getShipmentFormState());
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState(adminCancellationReasons[0]);
   const [customCancelReason, setCustomCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
+
+  async function refreshOrder(orderId: string) {
+    const row = await getAdminOrderById(orderId);
+    setOrder(row);
+    setShipmentForm(getShipmentFormState(row?.shipment));
+    return row;
+  }
 
   useEffect(() => {
     let active = true;
@@ -148,9 +157,7 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
     setConfirming(true);
     try {
       await confirmAdminOrder(order.id);
-      const row = await getAdminOrderById(order.id);
-      setOrder(row);
-      setShipmentForm(getShipmentFormState(row?.shipment));
+      await refreshOrder(order.id);
       pushToast(
         "Xác nhận đơn hàng thành công.",
         "Đơn hàng đã được xác nhận để xử lý. Thanh toán vẫn là mô phỏng/chưa qua cổng thật."
@@ -176,9 +183,7 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
     setCancelling(true);
     try {
       await cancelAdminOrder(order.id, reason);
-      const row = await getAdminOrderById(order.id);
-      setOrder(row);
-      setShipmentForm(getShipmentFormState(row?.shipment));
+      await refreshOrder(order.id);
       setShowCancelForm(false);
       pushToast("Cập nhật trạng thái đơn hàng thành công.", "Đơn hàng đã được hủy với lý do đã lưu.");
     } catch (cancelError) {
@@ -189,12 +194,12 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
     }
   }
 
-  async function saveShipment(event: FormEvent<HTMLFormElement>) {
+  async function saveShipmentDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!order) return;
 
-    if (!canManageShipment(order)) {
-      pushToast("Không thể cập nhật vận chuyển. Vui lòng thử lại.", "Cần xác nhận đơn hàng trước khi chuẩn bị giao.");
+    if (!canEditShipmentDetails(order)) {
+      pushToast("Không thể cập nhật vận chuyển. Vui lòng thử lại.", "Chỉ được sửa thông tin vận chuyển trước khi bàn giao cho đơn vị vận chuyển.");
       return;
     }
 
@@ -206,23 +211,35 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
 
     setUpdatingShipment(true);
     try {
-      await upsertAdminShipment(order.id, {
+      await updateAdminShipmentDetails(order.id, {
         carrier_name: shipmentForm.carrier_name.trim() || null,
         tracking_number: shipmentForm.tracking_number.trim() || null,
-        shipping_status: shipmentForm.shipping_status,
         shipping_fee: shippingFee,
-        estimated_delivery_date: shipmentForm.estimated_delivery_date || null,
-        shipped_at: toIsoDateTime(shipmentForm.shipped_at),
-        delivered_at: toIsoDateTime(shipmentForm.delivered_at)
+        estimated_delivery_date: shipmentForm.estimated_delivery_date || null
       });
-      const row = await getAdminOrderById(order.id);
-      setOrder(row);
-      setShipmentForm(getShipmentFormState(row?.shipment));
+      await refreshOrder(order.id);
       pushToast("Cập nhật vận chuyển thành công.");
-    } catch {
-      pushToast("Không thể cập nhật vận chuyển. Vui lòng thử lại.");
+    } catch (shipmentError) {
+      const message = shipmentError instanceof Error ? shipmentError.message : "Vui lòng thử lại.";
+      pushToast("Không thể cập nhật vận chuyển. Vui lòng thử lại.", message);
     } finally {
       setUpdatingShipment(false);
+    }
+  }
+
+  async function moveShipment(nextStatus: "preparing" | "shipped") {
+    if (!order) return;
+
+    setTransitioningShipment(nextStatus);
+    try {
+      await transitionAdminShipment(order.id, nextStatus);
+      await refreshOrder(order.id);
+      pushToast(nextStatus === "preparing" ? "Đã chuyển sang chuẩn bị hàng." : "Đã bàn giao đơn vị vận chuyển.");
+    } catch (shipmentError) {
+      const message = shipmentError instanceof Error ? shipmentError.message : "Vui lòng thử lại.";
+      pushToast("Không thể cập nhật vận chuyển. Vui lòng thử lại.", message);
+    } finally {
+      setTransitioningShipment(null);
     }
   }
 
@@ -365,7 +382,7 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
                     <div>
                       <p className="text-sm font-semibold text-rose-800">Hủy đơn hàng</p>
                       <p className="mt-2 text-sm text-rose-700">
-                        Hủy đơn pending/confirmed mock cần lý do. Không xử lý hoàn tiền thật trong MVP.
+                        Hủy đơn pending/confirmed mock cần lý do. Admin không thể hủy sau khi đơn đã bàn giao hoặc đã giao trong MVP.
                       </p>
                     </div>
                     {!showCancelForm ? (
@@ -420,40 +437,36 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
                 </div>
               ) : null}
 
-              <form className="mt-6 border-t border-slate-100 pt-6" onSubmit={saveShipment}>
+              <form className="mt-6 border-t border-slate-100 pt-6" onSubmit={saveShipmentDetails}>
                 <div>
                   <h3 className="text-lg font-bold text-slate-950">Vận chuyển thủ công</h3>
                   <p className="mt-2 text-sm text-slate-600">
-                    Fulfillment thủ công/mock chỉ bắt đầu sau khi Admin xác nhận đơn hàng. Không xem đây là đơn đã được cổng thanh toán thật xác nhận.
+                    Fulfillment thủ công/mock chỉ bắt đầu sau khi Admin xác nhận đơn hàng. Admin không được tự đánh dấu đã giao trong MVP.
                   </p>
                 </div>
-                {!canManageShipment(order) ? (
+
+                <div className="mt-4 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                  <p>
+                    <span className="font-semibold text-slate-900">Trạng thái:</span>{" "}
+                    {getShippingStatusLabel(order.shipment?.shipping_status)}
+                  </p>
+                  <p className="mt-2">
+                    <span className="font-semibold text-slate-900">Thời điểm gửi:</span>{" "}
+                    {formatDate(order.shipment?.shipped_at)}
+                  </p>
+                  <p className="mt-2">
+                    <span className="font-semibold text-slate-900">Thời điểm giao:</span>{" "}
+                    {formatDate(order.shipment?.delivered_at)}
+                  </p>
+                </div>
+
+                {!canEditShipmentDetails(order) ? (
                   <p className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
-                    Cần xác nhận đơn hàng trước khi cập nhật vận chuyển.
+                    {order.status !== "confirmed"
+                      ? "Cần xác nhận đơn hàng trước khi cập nhật vận chuyển."
+                      : "Thông tin vận chuyển chỉ được sửa trước khi bàn giao cho đơn vị vận chuyển."}
                   </p>
                 ) : null}
-
-                <label className="mt-4 block text-sm font-semibold text-slate-700" htmlFor="shipping-status">
-                  Trạng thái giao hàng
-                </label>
-                <select
-                  id="shipping-status"
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  disabled={updatingShipment || !canManageShipment(order)}
-                  value={shipmentForm.shipping_status}
-                  onChange={(event) =>
-                    setShipmentForm((current) => ({
-                      ...current,
-                      shipping_status: event.target.value as ShippingStatus
-                    }))
-                  }
-                >
-                  {shippingStatusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
 
                 <div className="mt-4 grid gap-4">
                   <label className="block text-sm font-semibold text-slate-700" htmlFor="carrier-name">
@@ -461,7 +474,7 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
                     <input
                       id="carrier-name"
                       className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      disabled={updatingShipment || !canManageShipment(order)}
+                      disabled={updatingShipment || !canEditShipmentDetails(order)}
                       value={shipmentForm.carrier_name}
                       onChange={(event) => setShipmentForm((current) => ({ ...current, carrier_name: event.target.value }))}
                     />
@@ -472,7 +485,7 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
                     <input
                       id="tracking-number"
                       className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      disabled={updatingShipment || !canManageShipment(order)}
+                      disabled={updatingShipment || !canEditShipmentDetails(order)}
                       value={shipmentForm.tracking_number}
                       onChange={(event) => setShipmentForm((current) => ({ ...current, tracking_number: event.target.value }))}
                     />
@@ -486,7 +499,7 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
                       step="1000"
                       type="number"
                       className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      disabled={updatingShipment || !canManageShipment(order)}
+                      disabled={updatingShipment || !canEditShipmentDetails(order)}
                       value={shipmentForm.shipping_fee}
                       onChange={(event) => setShipmentForm((current) => ({ ...current, shipping_fee: event.target.value }))}
                     />
@@ -498,41 +511,45 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
                       id="estimated-delivery-date"
                       type="date"
                       className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      disabled={updatingShipment || !canManageShipment(order)}
+                      disabled={updatingShipment || !canEditShipmentDetails(order)}
                       value={shipmentForm.estimated_delivery_date}
                       onChange={(event) => setShipmentForm((current) => ({ ...current, estimated_delivery_date: event.target.value }))}
                     />
                   </label>
-
-                  <label className="block text-sm font-semibold text-slate-700" htmlFor="shipped-at">
-                    Thời điểm gửi hàng
-                    <input
-                      id="shipped-at"
-                      type="datetime-local"
-                      className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      disabled={updatingShipment || !canManageShipment(order)}
-                      value={shipmentForm.shipped_at}
-                      onChange={(event) => setShipmentForm((current) => ({ ...current, shipped_at: event.target.value }))}
-                    />
-                  </label>
-
-                  <label className="block text-sm font-semibold text-slate-700" htmlFor="delivered-at">
-                    Thời điểm giao thành công
-                    <input
-                      id="delivered-at"
-                      type="datetime-local"
-                      className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                      disabled={updatingShipment || !canManageShipment(order)}
-                      value={shipmentForm.delivered_at}
-                      onChange={(event) => setShipmentForm((current) => ({ ...current, delivered_at: event.target.value }))}
-                    />
-                  </label>
                 </div>
 
-                <Button className="mt-5 w-full" disabled={updatingShipment || !canManageShipment(order)} type="submit">
+                <Button className="mt-5 w-full" disabled={updatingShipment || !canEditShipmentDetails(order)} type="submit">
                   {updatingShipment ? "Đang lưu..." : order.shipment ? "Cập nhật vận chuyển" : "Tạo thông tin vận chuyển"}
                 </Button>
               </form>
+
+              <div className="mt-4 grid gap-3">
+                {canStartPreparation(order) ? (
+                  <Button
+                    disabled={transitioningShipment !== null}
+                    onClick={() => void moveShipment("preparing")}
+                    type="button"
+                  >
+                    {transitioningShipment === "preparing" ? "Đang cập nhật..." : "Chuẩn bị hàng"}
+                  </Button>
+                ) : null}
+
+                {canHandOverToCarrier(order) ? (
+                  <Button
+                    disabled={transitioningShipment !== null}
+                    onClick={() => void moveShipment("shipped")}
+                    type="button"
+                  >
+                    {transitioningShipment === "shipped" ? "Đang cập nhật..." : "Bàn giao đơn vị vận chuyển"}
+                  </Button>
+                ) : null}
+
+                {order.shipment?.shipping_status === "delivered" ? (
+                  <p className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+                    Đơn đã được Patient xác nhận nhận hàng. Trạng thái đã giao là chỉ đọc với Admin trong MVP.
+                  </p>
+                ) : null}
+              </div>
             </Card>
           </div>
         )}

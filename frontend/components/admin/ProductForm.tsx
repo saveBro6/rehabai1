@@ -6,11 +6,25 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { getProductVisibilityBadgeClass, getProductVisibilityLabel } from "@/lib/product-stock";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
+import { DEFAULT_PRODUCT_CATEGORY_SUGGESTIONS as MANAGED_PRODUCT_CATEGORY_SUGGESTIONS } from "@/services/product-categories.service";
 import { type ProductMutationPayload, uploadProductImage } from "@/services/products.service";
 import type { Product } from "@/types";
 
 const MAX_PRODUCT_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const DEFAULT_PRODUCT_CATEGORY_SUGGESTIONS = [
+  "Dụng cụ tập tay",
+  "Dụng cụ tập chân",
+  "Dây kháng lực",
+  "Khung tập đi",
+  "Ghế hỗ trợ",
+  "Bóng tập phục hồi",
+  "Thiết bị theo dõi sức khỏe",
+  "Vật tư hỗ trợ phục hồi",
+  "Dụng cụ thăng bằng",
+  "Sản phẩm chăm sóc tại nhà"
+];
 
 type ProductFormState = {
   name: string;
@@ -62,6 +76,18 @@ function validateSelectedImage(file: File) {
   return "";
 }
 
+function uniqueCategories(values: string[]) {
+  const categories = new Map<string, string>();
+
+  for (const value of values) {
+    const category = value.trim();
+    if (!category) continue;
+    categories.set(category.toLocaleLowerCase("vi"), category);
+  }
+
+  return Array.from(categories.values());
+}
+
 export function ProductForm({
   mode,
   categorySuggestions = [],
@@ -80,8 +106,34 @@ export function ProductForm({
   const previewUrl = useMemo(() => localPreviewUrl || getImageUrl(form.image_url), [form.image_url, localPreviewUrl]);
   const numericPrice = Number(form.price || 0);
   const numericStock = Number(form.stock_quantity || 0);
-  const datalistId = `product-category-options-${mode}`;
+  const categoryListboxId = `product-category-listbox-${mode}`;
   const isBusy = loading || uploading;
+  const previewStatusProduct = initialProduct || { is_active: true, deleted_at: null };
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const existingCategories = useMemo(() => uniqueCategories(categorySuggestions), [categorySuggestions]);
+  const fallbackCategories = useMemo(() => {
+    const existingKeys = new Set(existingCategories.map((category) => category.toLocaleLowerCase("vi")));
+    return MANAGED_PRODUCT_CATEGORY_SUGGESTIONS.filter(
+      (category) => !existingKeys.has(category.toLocaleLowerCase("vi"))
+    );
+  }, [existingCategories]);
+  const categoryQuery = form.category.trim();
+  const normalizedCategoryQuery = categoryQuery.toLocaleLowerCase("vi");
+  const matchingExistingCategories = useMemo(() => {
+    if (!normalizedCategoryQuery) return existingCategories;
+    return existingCategories.filter((category) => category.toLocaleLowerCase("vi").includes(normalizedCategoryQuery));
+  }, [existingCategories, normalizedCategoryQuery]);
+  const matchingFallbackCategories = useMemo(() => {
+    if (!normalizedCategoryQuery) return fallbackCategories;
+    return fallbackCategories.filter((category) => category.toLocaleLowerCase("vi").includes(normalizedCategoryQuery));
+  }, [fallbackCategories, normalizedCategoryQuery]);
+  const hasExactCategoryMatch = useMemo(() => {
+    if (!normalizedCategoryQuery) return false;
+    return [...existingCategories, ...fallbackCategories].some(
+      (category) => category.toLocaleLowerCase("vi") === normalizedCategoryQuery
+    );
+  }, [existingCategories, fallbackCategories, normalizedCategoryQuery]);
+  const showNewCategoryAction = Boolean(categoryQuery && !hasExactCategoryMatch);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -115,6 +167,35 @@ export function ProductForm({
     }
 
     setSelectedImage(file);
+  }
+
+  function selectCategory(category: string) {
+    setForm((current) => ({ ...current, category }));
+    setCategoryMenuOpen(false);
+  }
+
+  function renderCategoryOption(category: string, tone: "existing" | "suggested" = "existing") {
+    const selected = form.category.trim().toLocaleLowerCase("vi") === category.toLocaleLowerCase("vi");
+
+    return (
+      <button
+        key={`${tone}-${category}`}
+        type="button"
+        className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
+          selected
+            ? "border-emerald-300 bg-emerald-50 font-semibold text-emerald-700"
+            : tone === "existing"
+              ? "border-slate-200 bg-white text-slate-700 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+              : "border-emerald-100 bg-emerald-50/50 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+        }`}
+        role="option"
+        aria-selected={selected}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => selectCategory(category)}
+      >
+        {category}
+      </button>
+    );
   }
 
   async function submitForm(event: FormEvent<HTMLFormElement>) {
@@ -198,24 +279,102 @@ export function ProductForm({
           />
         </label>
 
-        <label className="grid gap-2 text-sm font-semibold text-slate-700" htmlFor="product-category">
-          Danh mục
+        <div
+          className="relative grid gap-2 text-sm font-semibold text-slate-700"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setCategoryMenuOpen(false);
+            }
+          }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="product-category">Danh mục</label>
+            <button
+              type="button"
+              className="text-xs font-bold text-emerald-700 hover:text-emerald-800"
+              disabled={isBusy}
+              onClick={() => {
+                setForm((current) => ({ ...current, category: "" }));
+                setCategoryMenuOpen(true);
+              }}
+            >
+              Thêm danh mục mới
+            </button>
+          </div>
           <input
             id="product-category"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+            aria-autocomplete="list"
+            aria-controls={categoryListboxId}
+            aria-expanded={categoryMenuOpen}
+            aria-haspopup="listbox"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
             disabled={isBusy}
-            list={datalistId}
             required
+            role="combobox"
             value={form.category}
-            onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
+            onChange={(event) => {
+              setForm((current) => ({ ...current, category: event.target.value }));
+              setCategoryMenuOpen(true);
+            }}
+            onFocus={() => setCategoryMenuOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setCategoryMenuOpen(false);
+              }
+            }}
           />
-          <datalist id={datalistId}>
-            {categorySuggestions.map((category) => (
-              <option key={category} value={category} />
-            ))}
-          </datalist>
-          <span className="text-xs font-normal text-slate-500">Chọn hoặc nhập danh mục mới</span>
-        </label>
+          {categoryMenuOpen && (matchingExistingCategories.length || matchingFallbackCategories.length || showNewCategoryAction) ? (
+            <div
+              id={categoryListboxId}
+              className="absolute left-0 right-0 top-full z-30 mt-2 max-h-96 overflow-auto rounded-lg border border-slate-200 bg-white p-4 text-sm font-normal text-slate-800 shadow-xl"
+              role="listbox"
+            >
+              <div className="rounded-lg bg-emerald-50 px-4 py-3">
+                <p className="font-bold text-emerald-800">Danh mục sản phẩm</p>
+                <p className="mt-1 text-xs text-emerald-700">
+                  Chọn danh mục có sẵn hoặc nhập danh mục mới cho catalog RehabAI.
+                </p>
+              </div>
+
+              {showNewCategoryAction ? (
+                <button
+                  type="button"
+                  className="mt-3 w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-left text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                  role="option"
+                  aria-selected="false"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectCategory(categoryQuery)}
+                >
+                  {`Dùng "${categoryQuery}" làm danh mục mới`}
+                </button>
+              ) : null}
+
+              {matchingExistingCategories.length ? (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-bold uppercase text-slate-500">Đang có trong hệ thống</p>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">
+                      {matchingExistingCategories.length}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {matchingExistingCategories.map((category) => renderCategoryOption(category, "existing"))}
+                  </div>
+                </div>
+              ) : null}
+
+              {matchingFallbackCategories.length ? (
+                <div className="mt-4">
+                  <p className="text-xs font-bold uppercase text-emerald-700">Gợi ý nhanh</p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {matchingFallbackCategories.map((category) => renderCategoryOption(category, "suggested"))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <span className="text-xs font-normal text-slate-500">Chọn danh mục có sẵn hoặc nhập danh mục mới</span>
+        </div>
 
         <label className="grid gap-2 text-sm font-semibold text-slate-700" htmlFor="product-description">
           Mô tả
@@ -329,7 +488,9 @@ export function ProductForm({
             {Number.isFinite(numericPrice) ? formatCurrency(numericPrice) : "Giá chưa hợp lệ"}
           </p>
           <p>Tồn kho: {Number.isFinite(numericStock) ? numericStock : 0}</p>
-          <p className="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">Đã công khai</p>
+          <p className={`rounded-lg p-3 text-xs font-semibold ${getProductVisibilityBadgeClass(previewStatusProduct)}`}>
+            {getProductVisibilityLabel(previewStatusProduct)}
+          </p>
         </div>
       </Card>
     </form>

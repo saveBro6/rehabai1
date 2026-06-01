@@ -297,34 +297,39 @@ export async function cancelAdminOrder(orderId: string, reason: string) {
 export type AdminShipmentInput = {
   carrier_name?: string | null;
   tracking_number?: string | null;
-  shipping_status: ShippingStatus;
   shipping_fee?: number | null;
   estimated_delivery_date?: string | null;
-  shipped_at?: string | null;
-  delivered_at?: string | null;
 };
 
-export async function upsertAdminShipment(orderId: string, shipment: AdminShipmentInput) {
+export async function updateAdminShipmentDetails(orderId: string, shipment: AdminShipmentInput) {
   const supabase = getSupabase();
   const { data, error } = await supabase
-    .from("shipments")
-    .upsert(
-      {
-        order_id: orderId,
-        carrier_name: shipment.carrier_name || null,
-        tracking_number: shipment.tracking_number || null,
-        shipping_status: shipment.shipping_status,
-        shipping_fee: shipment.shipping_fee ?? 0,
-        estimated_delivery_date: shipment.estimated_delivery_date || null,
-        shipped_at: shipment.shipped_at || null,
-        delivered_at: shipment.delivered_at || null,
-        updated_at: new Date().toISOString(),
-        is_deleted: false
-      },
-      { onConflict: "order_id" }
-    )
-    .select("*")
+    .rpc("admin_update_shipment_details", {
+      target_order_id: orderId,
+      p_carrier_name: shipment.carrier_name || null,
+      p_tracking_number: shipment.tracking_number || null,
+      p_shipping_fee: shipment.shipping_fee ?? 0,
+      p_estimated_delivery_date: shipment.estimated_delivery_date || null
+    })
     .single();
   assertNoSupabaseError(error);
-  return data as Shipment;
+  return data as unknown as Shipment;
+}
+
+export async function transitionAdminShipment(orderId: string, status: Extract<ShippingStatus, "preparing" | "shipped">) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .rpc("admin_transition_shipment", { target_order_id: orderId, next_status: status })
+    .single();
+  assertNoSupabaseError(error);
+  return data as unknown as Shipment;
+}
+
+export async function confirmPatientOrderReceived(orderId: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .rpc("confirm_patient_order_received", { target_order_id: orderId })
+    .single();
+  assertNoSupabaseError(error);
+  return data as unknown as Shipment;
 }

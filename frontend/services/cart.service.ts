@@ -1,9 +1,19 @@
 import { assertNoSupabaseError, getSupabase } from "@/services/common";
 import type { CartItem, Product } from "@/types";
 
+const QUANTITY_MIN_ERROR = "S\u1ed1 l\u01b0\u1ee3ng ph\u1ea3i l\u00e0 s\u1ed1 nguy\u00ean l\u1edbn h\u01a1n 0.";
+const PATIENT_BUYER_ERROR = "Ch\u1ec9 t\u00e0i kho\u1ea3n B\u1ec7nh nh\u00e2n active m\u1edbi c\u00f3 th\u1ec3 mua s\u1ea3n ph\u1ea9m.";
+const UNAVAILABLE_PRODUCT_ERROR = "S\u1ea3n ph\u1ea9m n\u00e0y kh\u00f4ng c\u00f2n kh\u1ea3 d\u1ee5ng.";
+const UNAVAILABLE_CART_PRODUCT_ERROR = "Gi\u1ecf h\u00e0ng c\u00f3 s\u1ea3n ph\u1ea9m kh\u00f4ng c\u00f2n kh\u1ea3 d\u1ee5ng.";
+const MISSING_CART_ITEM_ERROR = "Kh\u00f4ng t\u00ecm th\u1ea5y s\u1ea3n ph\u1ea9m trong gi\u1ecf h\u00e0ng.";
+
+function getStockExceededError(stockQuantity: number) {
+  return `S\u1ed1 l\u01b0\u1ee3ng trong gi\u1ecf v\u01b0\u1ee3t qu\u00e1 t\u1ed3n kho hi\u1ec7n t\u1ea1i. Ch\u1ec9 c\u00f2n ${stockQuantity} s\u1ea3n ph\u1ea9m.`;
+}
+
 function assertPositiveQuantity(quantity: number) {
   if (!Number.isInteger(quantity) || quantity < 1) {
-    throw new Error("Quantity must be at least 1.");
+    throw new Error(QUANTITY_MIN_ERROR);
   }
 }
 
@@ -17,7 +27,7 @@ export async function ensurePatientBuyer(userId: string) {
   assertNoSupabaseError(error);
 
   if (data?.account_type !== "patient" || data?.account_status !== "active") {
-    throw new Error("Only active Patient accounts can buy products.");
+    throw new Error(PATIENT_BUYER_ERROR);
   }
 }
 
@@ -31,7 +41,7 @@ async function getProductForCart(productId: string) {
   assertNoSupabaseError(error);
 
   if (!data) {
-    throw new Error("Product is no longer available.");
+    throw new Error(UNAVAILABLE_PRODUCT_ERROR);
   }
 
   return data as Product;
@@ -41,8 +51,12 @@ export async function assertProductStock(productId: string, quantity: number) {
   assertPositiveQuantity(quantity);
   const product = await getProductForCart(productId);
 
+  if (!product.is_active || product.deleted_at) {
+    throw new Error(UNAVAILABLE_PRODUCT_ERROR);
+  }
+
   if (quantity > product.stock_quantity) {
-    throw new Error(`Only ${product.stock_quantity} item(s) are available for ${product.name}.`);
+    throw new Error(getStockExceededError(product.stock_quantity));
   }
 
   return product;
@@ -60,11 +74,11 @@ export async function validateCartItemsStock(cartItems: CartItem[]) {
     const product = productMap.get(item.product_id);
 
     if (!product) {
-      throw new Error("Cart contains an unavailable product.");
+      throw new Error(UNAVAILABLE_CART_PRODUCT_ERROR);
     }
 
     if (item.quantity > product.stock_quantity) {
-      throw new Error(`Only ${product.stock_quantity} item(s) are available for ${product.name}.`);
+      throw new Error(getStockExceededError(product.stock_quantity));
     }
   }
 
@@ -130,7 +144,7 @@ export async function updateCartItem(cartItemId: string, quantity: number) {
   assertNoSupabaseError(existingError);
 
   if (!existing) {
-    throw new Error("Cart item was not found.");
+    throw new Error(MISSING_CART_ITEM_ERROR);
   }
 
   await ensurePatientBuyer(existing.user_id);

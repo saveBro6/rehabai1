@@ -6,9 +6,16 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { ProductCategoryManager } from "@/components/admin/ProductCategoryManager";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
+import {
+  getProductStockBadgeClass,
+  getProductStockLabel,
+  getProductVisibilityBadgeClass,
+  getProductVisibilityLabel
+} from "@/lib/product-stock";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
-import { getAdminProducts } from "@/services/products.service";
+import { getAdminProducts, setProductActive } from "@/services/products.service";
 import type { Product } from "@/types";
 
 function formatDate(value?: string | null) {
@@ -20,6 +27,7 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -36,6 +44,19 @@ export default function AdminProductsPage() {
   useEffect(() => {
     void loadProducts();
   }, [loadProducts]);
+
+  async function toggleProductVisibility(product: Product) {
+    setUpdatingProductId(product.id);
+    setError("");
+    try {
+      await setProductActive(product.id, product.is_active === false);
+      await loadProducts();
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Không thể cập nhật trạng thái sản phẩm.");
+    } finally {
+      setUpdatingProductId(null);
+    }
+  }
 
   return (
     <RequireAdmin>
@@ -58,6 +79,8 @@ export default function AdminProductsPage() {
             <p className="text-sm font-semibold text-rose-700">{error}</p>
           </Card>
         ) : null}
+
+        <ProductCategoryManager />
 
         <Card className="mt-6 overflow-hidden p-0">
           <div className="overflow-x-auto">
@@ -100,10 +123,17 @@ export default function AdminProductsPage() {
                       </td>
                       <td className="px-5 py-4 text-slate-700">{product.category}</td>
                       <td className="px-5 py-4 font-semibold text-emerald-700">{formatCurrency(Number(product.price || 0))}</td>
-                      <td className="px-5 py-4 text-slate-700">{product.stock_quantity}</td>
                       <td className="px-5 py-4">
-                        <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-                          Đã công khai
+                        <div className="grid gap-1">
+                          <span className="font-semibold text-slate-800">{product.stock_quantity}</span>
+                          <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${getProductStockBadgeClass(product.stock_quantity)}`}>
+                            {getProductStockLabel(product.stock_quantity)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getProductVisibilityBadgeClass(product)}`}>
+                          {getProductVisibilityLabel(product)}
                         </span>
                         {product.is_recommended ? (
                           <span className="mt-2 block w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
@@ -120,6 +150,20 @@ export default function AdminProductsPage() {
                           <Link href={`/admin/products/${product.id}/edit`}>
                             <Button variant="secondary">Sửa</Button>
                           </Link>
+                          {!product.deleted_at ? (
+                            <Button
+                              disabled={updatingProductId === product.id}
+                              onClick={() => void toggleProductVisibility(product)}
+                              variant="secondary"
+                              type="button"
+                            >
+                              {updatingProductId === product.id
+                                ? "Đang cập nhật..."
+                                : product.is_active === false
+                                  ? "Công khai lại"
+                                  : "Ngừng bán"}
+                            </Button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

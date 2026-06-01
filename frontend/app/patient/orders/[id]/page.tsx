@@ -12,7 +12,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { getShippingAddressLines } from "@/lib/shipping-address";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
-import { cancelPatientOrder, getOrderById, type OrderWithItems, type ShippingStatus } from "@/services/orders.service";
+import {
+  cancelPatientOrder,
+  confirmPatientOrderReceived,
+  getOrderById,
+  type OrderWithItems,
+  type ShippingStatus
+} from "@/services/orders.service";
 
 const patientCancellationReasons = [
   "Tôi không còn nhu cầu mua sản phẩm",
@@ -56,6 +62,10 @@ function canPatientCancel(order: OrderWithItems) {
   return order.status === "pending" && !["shipped", "delivered"].includes(order.shipment?.shipping_status || "");
 }
 
+function canConfirmReceipt(order: OrderWithItems) {
+  return order.status === "confirmed" && order.shipment?.shipping_status === "shipped";
+}
+
 function buildCancellationReason(reason: string, customReason: string) {
   return reason === "Khác" ? customReason.trim() : reason;
 }
@@ -70,7 +80,15 @@ export default function PatientOrderDetailPage({ params }: { params: { id: strin
   const [cancelReason, setCancelReason] = useState(patientCancellationReasons[0]);
   const [customCancelReason, setCustomCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
+  const [confirmingReceipt, setConfirmingReceipt] = useState(false);
   const isActivePatient = profile?.account_type === "patient" && profile?.account_status === "active";
+
+  async function refreshOrder(orderId: string, userId: string) {
+    const row = await getOrderById(orderId, userId);
+    setOrder(row);
+    return row;
+  }
 
   useEffect(() => {
     if (isLoading) return;
@@ -119,8 +137,7 @@ export default function PatientOrderDetailPage({ params }: { params: { id: strin
     setCancelling(true);
     try {
       await cancelPatientOrder(order.id, reason);
-      const row = await getOrderById(order.id, user.id);
-      setOrder(row);
+      await refreshOrder(order.id, user.id);
       setShowCancelForm(false);
       pushToast("Đã hủy đơn hàng", "Lý do hủy đã được lưu. Không có hoàn tiền thật trong MVP mock.");
     } catch (cancelError) {
@@ -128,6 +145,23 @@ export default function PatientOrderDetailPage({ params }: { params: { id: strin
       pushToast("Không thể hủy đơn hàng", message);
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function confirmReceipt() {
+    if (!order || !user) return;
+
+    setConfirmingReceipt(true);
+    try {
+      await confirmPatientOrderReceived(order.id);
+      await refreshOrder(order.id, user.id);
+      setShowReceiptDialog(false);
+      pushToast("Đã xác nhận nhận hàng thành công.");
+    } catch (receiptError) {
+      const message = receiptError instanceof Error ? receiptError.message : "Vui lòng thử lại.";
+      pushToast("Không thể xác nhận nhận hàng. Vui lòng thử lại.", message);
+    } finally {
+      setConfirmingReceipt(false);
     }
   }
 
@@ -244,17 +278,24 @@ export default function PatientOrderDetailPage({ params }: { params: { id: strin
                         <Button disabled={cancelling} type="submit">
                           {cancelling ? "Đang hủy..." : "Xác nhận hủy đơn"}
                         </Button>
-                        <Button
-                          disabled={cancelling}
-                          type="button"
-                          variant="ghost"
-                          onClick={() => setShowCancelForm(false)}
-                        >
+                        <Button disabled={cancelling} type="button" variant="ghost" onClick={() => setShowCancelForm(false)}>
                           Không hủy nữa
                         </Button>
                       </div>
                     </form>
                   ) : null}
+                </Card>
+              ) : null}
+
+              {canConfirmReceipt(order) ? (
+                <Card className="border-emerald-100 bg-emerald-50">
+                  <h2 className="text-xl font-bold text-emerald-950">Xác nhận đã nhận hàng</h2>
+                  <p className="mt-2 text-sm text-emerald-800">
+                    Chỉ xác nhận khi bạn đã nhận đủ đơn hàng. Sau khi xác nhận, trạng thái vận chuyển sẽ chuyển thành Đã giao.
+                  </p>
+                  <Button className="mt-4" onClick={() => setShowReceiptDialog(true)} type="button">
+                    Xác nhận đã nhận hàng
+                  </Button>
                 </Card>
               ) : null}
 
@@ -359,6 +400,28 @@ export default function PatientOrderDetailPage({ params }: { params: { id: strin
             </Card>
           </div>
         )}
+
+        {showReceiptDialog && order ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4" role="dialog" aria-modal="true">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+              <h2 className="text-xl font-bold text-slate-950">Xác nhận đã nhận hàng</h2>
+              <p className="mt-3 text-sm text-slate-600">
+                Tôi xác nhận đã nhận được đơn hàng.
+              </p>
+              <p className="mt-3 text-sm text-slate-600">
+                Sau khi xác nhận, trạng thái vận chuyển sẽ là Đã giao và bạn không thể xác nhận lại lần nữa.
+              </p>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <Button disabled={confirmingReceipt} variant="ghost" onClick={() => setShowReceiptDialog(false)} type="button">
+                  Đóng
+                </Button>
+                <Button disabled={confirmingReceipt} onClick={confirmReceipt} type="button">
+                  {confirmingReceipt ? "Đang xác nhận..." : "Xác nhận đã nhận hàng"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
     </RequireAuth>
   );
