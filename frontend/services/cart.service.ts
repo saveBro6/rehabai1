@@ -3,8 +3,10 @@ import type { CartItem, Product } from "@/types";
 
 const QUANTITY_MIN_ERROR = "S\u1ed1 l\u01b0\u1ee3ng ph\u1ea3i l\u00e0 s\u1ed1 nguy\u00ean l\u1edbn h\u01a1n 0.";
 const PATIENT_BUYER_ERROR = "Ch\u1ec9 t\u00e0i kho\u1ea3n B\u1ec7nh nh\u00e2n active m\u1edbi c\u00f3 th\u1ec3 mua s\u1ea3n ph\u1ea9m.";
-const UNAVAILABLE_PRODUCT_ERROR = "S\u1ea3n ph\u1ea9m n\u00e0y kh\u00f4ng c\u00f2n kh\u1ea3 d\u1ee5ng.";
-const UNAVAILABLE_CART_PRODUCT_ERROR = "Gi\u1ecf h\u00e0ng c\u00f3 s\u1ea3n ph\u1ea9m kh\u00f4ng c\u00f2n kh\u1ea3 d\u1ee5ng.";
+const UNAVAILABLE_PRODUCT_ERROR = "Sản phẩm không còn khả dụng.";
+const STOPPED_PRODUCT_ERROR = "Sản phẩm đã ngừng bán.";
+const OUT_OF_STOCK_ERROR = "Sản phẩm đã hết hàng.";
+const UNAVAILABLE_CART_PRODUCT_ERROR = "Không thể thanh toán vì giỏ hàng có sản phẩm không khả dụng.";
 const MISSING_CART_ITEM_ERROR = "Kh\u00f4ng t\u00ecm th\u1ea5y s\u1ea3n ph\u1ea9m trong gi\u1ecf h\u00e0ng.";
 
 function getStockExceededError(stockQuantity: number) {
@@ -52,7 +54,11 @@ export async function assertProductStock(productId: string, quantity: number) {
   const product = await getProductForCart(productId);
 
   if (!product.is_active || product.deleted_at) {
-    throw new Error(UNAVAILABLE_PRODUCT_ERROR);
+    throw new Error(product.deleted_at ? UNAVAILABLE_PRODUCT_ERROR : STOPPED_PRODUCT_ERROR);
+  }
+
+  if (product.stock_quantity <= 0) {
+    throw new Error(OUT_OF_STOCK_ERROR);
   }
 
   if (quantity > product.stock_quantity) {
@@ -75,6 +81,14 @@ export async function validateCartItemsStock(cartItems: CartItem[]) {
 
     if (!product) {
       throw new Error(UNAVAILABLE_CART_PRODUCT_ERROR);
+    }
+
+    if (!product.is_active || product.deleted_at) {
+      throw new Error(product.deleted_at ? UNAVAILABLE_CART_PRODUCT_ERROR : STOPPED_PRODUCT_ERROR);
+    }
+
+    if (product.stock_quantity <= 0) {
+      throw new Error(OUT_OF_STOCK_ERROR);
     }
 
     if (item.quantity > product.stock_quantity) {

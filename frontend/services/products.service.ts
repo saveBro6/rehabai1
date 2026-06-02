@@ -45,6 +45,36 @@ export async function getProducts(filters?: { category?: string; recommended?: b
   return (data || []) as Product[];
 }
 
+export async function searchPublicProducts(filters?: {
+  query?: string;
+  category?: string;
+  recommended?: boolean;
+  limit?: number;
+}) {
+  const supabase = getSupabase();
+  const searchTerm = filters?.query?.trim().replace(/[,]/g, " ") || "";
+  const limit = Math.min(Math.max(filters?.limit || 8, 1), 24);
+
+  let query = supabase
+    .from("products")
+    .select("*")
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .order("is_recommended", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (filters?.category) query = query.eq("category", filters.category);
+  if (filters?.recommended !== undefined) query = query.eq("is_recommended", filters.recommended);
+  if (searchTerm) {
+    query = query.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+  }
+
+  const { data, error } = await query;
+  assertNoSupabaseError(error);
+  return (data || []) as Product[];
+}
+
 export async function getProductCategories() {
   return getPublicProductCategoryNames();
 }

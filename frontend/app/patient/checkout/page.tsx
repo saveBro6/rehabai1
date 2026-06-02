@@ -46,6 +46,19 @@ function isValidPhone(phone: string) {
   return /^(?:\+?84|0)[0-9]{8,10}$/.test(phone.replace(/[\s.-]/g, ""));
 }
 
+function normalizeCheckoutError(error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : "Vui lòng thử lại sau.";
+  if (
+    /insufficient stock|product stock changed|stock|availability|available|inactive|deleted|no longer|requested|cart/i.test(
+      rawMessage
+    )
+  ) {
+    return STOCK_CHECKOUT_BLOCK_MESSAGE;
+  }
+
+  return rawMessage;
+}
+
 export default function PatientCheckoutPage() {
   const router = useRouter();
   const { user, profile, isLoading: isAuthLoading } = useAuth();
@@ -72,7 +85,10 @@ export default function PatientCheckoutPage() {
   function validateDeliveryAddress() {
     const missingField = requiredDeliveryFields.find((field) => !deliveryAddress[field].trim());
     if (missingField) {
-      pushToast("Thiếu thông tin giao hàng", "Vui lòng nhập đầy đủ họ tên, số điện thoại và địa chỉ nhận hàng.");
+      pushToast(
+        "Thiếu thông tin giao hàng",
+        "Vui lòng nhập đầy đủ họ tên, số điện thoại và địa chỉ nhận hàng."
+      );
       return false;
     }
 
@@ -88,7 +104,10 @@ export default function PatientCheckoutPage() {
     event.preventDefault();
 
     if (!user || !isActivePatient) {
-      pushToast("Chỉ Bệnh nhân mới có thể thanh toán", "Guest, Bác sĩ và Admin không phải buyer role trong MVP.");
+      pushToast(
+        "Chỉ Bệnh nhân mới có thể thanh toán",
+        "Guest, Bác sĩ và Admin không phải buyer role trong MVP."
+      );
       return;
     }
 
@@ -98,7 +117,7 @@ export default function PatientCheckoutPage() {
     }
 
     if (hasStockIssue) {
-      pushToast("Kh\u00f4ng th\u1ec3 thanh to\u00e1n", STOCK_CHECKOUT_BLOCK_MESSAGE);
+      pushToast("Không thể thanh toán", STOCK_CHECKOUT_BLOCK_MESSAGE);
       return;
     }
 
@@ -122,11 +141,7 @@ export default function PatientCheckoutPage() {
         router.push("/patient/orders");
       }
     } catch (error) {
-      const rawMessage = error instanceof Error ? error.message : "Vui lòng thử lại sau.";
-      const message = /insufficient stock|product stock changed|availability|no longer available|available|requested/i.test(rawMessage)
-        ? STOCK_CHECKOUT_BLOCK_MESSAGE
-        : rawMessage;
-      pushToast("Thanh toán mô phỏng thất bại", message);
+      pushToast("Thanh toán mô phỏng thất bại", normalizeCheckoutError(error));
     } finally {
       setSubmitting(false);
     }
@@ -150,8 +165,12 @@ export default function PatientCheckoutPage() {
 
           {!isActivePatient && !isAuthLoading ? (
             <Card className="mt-6 border-amber-200 bg-amber-50">
-              <p className="font-semibold text-amber-800">Chỉ tài khoản Bệnh nhân active mới có thể checkout.</p>
-              <p className="mt-2 text-sm text-amber-700">Guest, Bác sĩ và Admin không phải buyer role trong MVP.</p>
+              <p className="font-semibold text-amber-800">
+                Chỉ tài khoản Bệnh nhân active mới có thể checkout.
+              </p>
+              <p className="mt-2 text-sm text-amber-700">
+                Guest, Bác sĩ và Admin không phải buyer role trong MVP.
+              </p>
             </Card>
           ) : null}
 

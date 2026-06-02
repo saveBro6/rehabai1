@@ -12,7 +12,8 @@ import {
   getCartStockWarning,
   getProductStockBadgeClass,
   getProductStockDetail,
-  getProductStockLabel
+  getProductStockLabel,
+  isProductSellable
 } from "@/lib/product-stock";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { useCart } from "@/hooks/useCart";
@@ -84,7 +85,7 @@ export default function CartPage() {
     <RequireAuth>
       <section className="mx-auto grid max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[1fr_360px]">
         <div>
-          <h1 className="text-3xl font-bold text-slate-950">Gio hang</h1>
+          <h1 className="text-3xl font-bold text-slate-950">Giỏ hàng</h1>
           {!isPatientBuyer ? (
             <Card className="mt-6 border-amber-200 bg-amber-50">
               <p className="font-semibold text-amber-800">{"T\u00e0i kho\u1ea3n n\u00e0y ch\u1ec9 \u0111\u01b0\u1ee3c xem s\u1ea3n ph\u1ea9m."}</p>
@@ -99,6 +100,7 @@ export default function CartPage() {
                 const stock = item.product?.stock_quantity || 0;
                 const itemPending = pendingAction === item.id;
                 const stockWarning = getCartStockWarning(item.product, item.quantity);
+                const canAdjustQuantity = isProductSellable(item.product) && stock > 0 && isPatientBuyer;
                 return (
                   <Card key={item.id} className="flex flex-col gap-4 sm:flex-row">
                     <Image
@@ -129,7 +131,7 @@ export default function CartPage() {
                           type="button"
                           variant="secondary"
                           onClick={() => void changeQuantity(item.id, item.quantity - 1)}
-                          disabled={itemPending || item.quantity <= 1 || !isPatientBuyer}
+                          disabled={itemPending || item.quantity <= 1 || !canAdjustQuantity}
                         >
                           -
                         </Button>
@@ -140,7 +142,7 @@ export default function CartPage() {
                           type="button"
                           variant="secondary"
                           onClick={() => void changeQuantity(item.id, item.quantity + 1)}
-                          disabled={itemPending || stock <= 0 || item.quantity >= stock || !isPatientBuyer || Boolean(stockWarning)}
+                          disabled={itemPending || !canAdjustQuantity || item.quantity >= stock || Boolean(stockWarning)}
                         >
                           +
                         </Button>

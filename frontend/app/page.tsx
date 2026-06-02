@@ -20,6 +20,7 @@ import {
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { PublicProductSearch } from "@/components/public/PublicProductSearch";
 import { getProtectedHref } from "@/lib/auth-navigation";
 import { visiblePricingPlans } from "@/lib/subscription-access";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
@@ -102,12 +103,13 @@ export default function LandingPage() {
 
   return (
     <div className="bg-white text-slate-800">
-      <section className="relative overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+      <section className="relative z-10 overflow-visible bg-gradient-to-br from-emerald-50 via-white to-teal-50">
         <div className="mx-auto grid min-h-[620px] max-w-7xl items-center gap-10 px-4 py-16 lg:grid-cols-[1.05fr_0.95fr]">
           <div>
             <p className="inline-flex rounded-full border border-emerald-100 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm">Phục hồi tại nhà chưa bao giờ dễ đến thế!</p>
             <h1 className="mt-6 max-w-4xl text-4xl font-bold leading-tight text-emerald-950 md:text-6xl">Phục hồi sau đột quỵ và chấn thương tại nhà cùng RehabAI</h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">RehabAI giúp bạn tiếp cận bác sĩ, bài tập phục hồi, lộ trình cá nhân hóa và theo dõi tiến trình ngay tại nhà.</p>
+            <PublicProductSearch />
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href={createPlanHref}>
                 <Button className="bg-emerald-600 hover:bg-emerald-700">Tạo lộ trình phục hồi</Button>

@@ -73,7 +73,7 @@ function getInfoContent(product: Product, key: InfoSectionKey) {
 
 export default function ProductDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const { isAuthenticated, profile, user } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, profile, user } = useAuth();
   const { pushToast } = useToast();
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
@@ -88,6 +88,8 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
   const isOutOfStock = stockQuantity <= 0;
   const availability = getAvailability(product);
   const purchaseDisabled = pendingAction !== null || isOutOfStock || !isSellable;
+  const actionDisabled = purchaseDisabled || authLoading;
+  const isKnownNonBuyer = isAuthenticated && !authLoading && !canBuy;
   const quantityOptions = useMemo(() => {
     const maxVisible = Math.min(Math.max(stockQuantity, 1), 10);
     return Array.from({ length: maxVisible }, (_, index) => index + 1);
@@ -250,17 +252,21 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
             </div>
           </div>
 
-          {isAuthenticated && !canBuy ? (
+          {authLoading ? (
+            <p className="mt-6 rounded-lg bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">
+              Đang kiểm tra quyền mua hàng...
+            </p>
+          ) : isKnownNonBuyer ? (
             <p className="mt-6 rounded-lg bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">
               Tài khoản Bác sĩ/Admin chỉ được xem sản phẩm và không thể mua hàng trong MVP.
             </p>
           ) : (
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <Button onClick={() => void addToCart("cart")} disabled={purchaseDisabled}>
-                {pendingAction === "cart" ? "Đang thêm..." : isAuthenticated ? "Thêm vào giỏ" : "Đăng nhập để thêm"}
+              <Button onClick={() => void addToCart("cart")} disabled={actionDisabled}>
+                {authLoading ? "Đang kiểm tra..." : pendingAction === "cart" ? "Đang thêm..." : isAuthenticated ? "Thêm vào giỏ" : "Đăng nhập để thêm"}
               </Button>
-              <Button onClick={() => void addToCart("buy")} disabled={purchaseDisabled} variant="secondary">
-                {pendingAction === "buy" ? "Đang thêm..." : isAuthenticated ? "Mua ngay" : "Đăng nhập để mua"}
+              <Button onClick={() => void addToCart("buy")} disabled={actionDisabled} variant="secondary">
+                {authLoading ? "Đang kiểm tra..." : pendingAction === "buy" ? "Đang thêm..." : isAuthenticated ? "Mua ngay" : "Đăng nhập để mua"}
               </Button>
             </div>
           )}
@@ -334,7 +340,9 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
               <p className="text-sm font-bold text-emerald-700">{formatCurrency(product.price)}</p>
             </div>
           </div>
-          {isAuthenticated && !canBuy ? (
+          {authLoading ? (
+            <p className="text-sm font-semibold text-slate-600">Đang kiểm tra quyền mua hàng...</p>
+          ) : isKnownNonBuyer ? (
             <p className="text-sm font-semibold text-slate-600">Tài khoản này chỉ được xem sản phẩm.</p>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
@@ -342,7 +350,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                 <button
                   type="button"
                   className="min-h-10 w-10 text-lg font-bold text-slate-700 disabled:text-slate-300"
-                  disabled={quantity <= 1 || purchaseDisabled}
+                  disabled={quantity <= 1 || actionDisabled}
                   onClick={() => updateQuantity(quantity - 1)}
                   aria-label="Giảm số lượng"
                 >
@@ -354,18 +362,18 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
                 <button
                   type="button"
                   className="min-h-10 w-10 text-lg font-bold text-slate-700 disabled:text-slate-300"
-                  disabled={quantity >= stockQuantity || purchaseDisabled}
+                  disabled={quantity >= stockQuantity || actionDisabled}
                   onClick={() => updateQuantity(quantity + 1)}
                   aria-label="Tăng số lượng"
                 >
                   +
                 </button>
               </div>
-              <Button onClick={() => void addToCart("cart")} disabled={purchaseDisabled}>
-                {isAuthenticated ? "Thêm vào giỏ" : "Đăng nhập để thêm"}
+              <Button onClick={() => void addToCart("cart")} disabled={actionDisabled}>
+                {authLoading ? "Đang kiểm tra..." : isAuthenticated ? "Thêm vào giỏ" : "Đăng nhập để thêm"}
               </Button>
-              <Button onClick={() => void addToCart("buy")} disabled={purchaseDisabled} variant="secondary">
-                {isAuthenticated ? "Mua ngay" : "Đăng nhập để mua"}
+              <Button onClick={() => void addToCart("buy")} disabled={actionDisabled} variant="secondary">
+                {authLoading ? "Đang kiểm tra..." : isAuthenticated ? "Mua ngay" : "Đăng nhập để mua"}
               </Button>
             </div>
           )}

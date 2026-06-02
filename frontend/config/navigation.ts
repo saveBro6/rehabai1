@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   Bell,
   CalendarCheck,
   CalendarClock,
@@ -95,9 +96,10 @@ export const doctorSidebarItems: SidebarItem[] = [
 ];
 
 export const adminSidebarItems: SidebarItem[] = [
-  { label: "Sản phẩm", href: "/admin/products", icon: ShoppingBag, requiresAuth: true },
   { label: "Tổng quan", href: "/admin", icon: ShieldCheck, requiresAuth: true },
-  { label: "Đơn hàng", href: "/admin/orders", icon: FileText, requiresAuth: true }
+  { label: "Sản phẩm", href: "/admin/products", icon: ShoppingBag, requiresAuth: true },
+  { label: "Đơn hàng", href: "/admin/orders", icon: FileText, requiresAuth: true },
+  { label: "Báo cáo bán hàng", href: "/admin/reports", icon: BarChart3, requiresAuth: true }
 ];
 
 export function getSidebarItemsForAccountType(accountType?: AccountType | null): SidebarItem[] {
@@ -123,10 +125,11 @@ export function getCartHref(accountType?: AccountType | null) {
 }
 
 export const pageTitles: Record<string, string> = {
-  "/admin/products": "Quản lý sản phẩm",
   "/": "Trang chủ",
   "/admin": "Quản trị",
+  "/admin/products": "Quản lý sản phẩm",
   "/admin/orders": "Quản lý đơn hàng",
+  "/admin/reports": "Báo cáo bán hàng",
   "/doctor": "Bác sĩ",
   "/doctor/dashboard": "Tổng quan bác sĩ",
   "/doctor/appointments": "Lịch hẹn bác sĩ",

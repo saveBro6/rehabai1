@@ -32,6 +32,7 @@ function normalizeShippingAddressLabel(label: string) {
   if (
     normalized === "người nhận" ||
     normalized === "họ tên người nhận" ||
+    normalized === "nguoi nhan" ||
     (normalized.startsWith("ng") && normalized.includes("nh")) ||
     (hasQuestionMarks && normalized.startsWith("ng"))
   ) {
@@ -40,6 +41,7 @@ function normalizeShippingAddressLabel(label: string) {
 
   if (
     normalized === "số điện thoại" ||
+    normalized === "so dien thoai" ||
     (normalized.startsWith("s") && normalized.includes("tho")) ||
     (hasQuestionMarks && normalized.includes("tho"))
   ) {
@@ -49,6 +51,8 @@ function normalizeShippingAddressLabel(label: string) {
   if (
     normalized === "tỉnh/thành phố" ||
     normalized === "tỉnh / thành phố" ||
+    normalized === "tinh/thanh pho" ||
+    normalized === "tinh / thanh pho" ||
     (normalized.startsWith("t") && normalized.includes("ph")) ||
     (hasQuestionMarks && normalized.startsWith("t") && normalized.includes("ph"))
   ) {
@@ -58,6 +62,8 @@ function normalizeShippingAddressLabel(label: string) {
   if (
     normalized === "quận/huyện" ||
     normalized === "quận / huyện" ||
+    normalized === "quan/huyen" ||
+    normalized === "quan / huyen" ||
     (normalized.startsWith("qu") && normalized.includes("huy")) ||
     (hasQuestionMarks && (normalized.startsWith("qu") || normalized.includes("huy")))
   ) {
@@ -67,23 +73,25 @@ function normalizeShippingAddressLabel(label: string) {
   if (
     normalized === "phường/xã" ||
     normalized === "phường / xã" ||
+    normalized === "phuong/xa" ||
+    normalized === "phuong / xa" ||
     (normalized.startsWith("ph") && normalized.includes("x")) ||
-    normalized.includes("phuong") ||
     (hasQuestionMarks && normalized.startsWith("ph"))
   ) {
     return "Phường/Xã";
   }
 
-  if (normalized === "ghi chú" || normalized.includes("ghi ch")) {
+  if (normalized === "ghi chú" || normalized === "ghi chu" || normalized.includes("ghi ch")) {
     return "Ghi chú";
   }
 
-  if (normalized === "địa chỉ cụ thể") {
+  if (normalized === "địa chỉ cụ thể" || normalized === "dia chi cu the") {
     return "Địa chỉ cụ thể";
   }
 
   if (
     normalized === "địa chỉ" ||
+    normalized === "dia chi" ||
     normalized.includes("dia chi") ||
     (hasQuestionMarks && (normalized.startsWith("?") || normalized.includes("dia")))
   ) {
