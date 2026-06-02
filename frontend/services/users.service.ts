@@ -103,7 +103,6 @@ export async function ensureUserProfile(authUser: AuthUser, fallback?: Partial<U
 function mergeAccountPatient(account: Account, patient: Patient | null): User {
   return {
     id: patient?.id || account.id,
-    account_id: account.id,
     full_name: patient?.full_name || account.email.split("@")[0] || "Nguoi dung",
     email: account.email,
     phone: patient?.phone || undefined,

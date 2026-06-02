@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DoctorCompleteAppointmentDialog,
   DoctorDashboardStats,
+  type DoctorRejectPayload,
   DoctorPendingAppointments,
   DoctorRejectAppointmentDialog,
   DoctorSchedulePreview,
@@ -15,7 +16,6 @@ import {
 import { useDoctor } from "@/components/doctor/DoctorLayout";
 import { useToast } from "@/hooks/useToast";
 import { acceptAppointment, completeAppointment, rejectAppointment } from "@/services/appointments.service";
-import { createDoctorNote } from "@/services/doctor-notes.service";
 import { getDoctorDashboardData, isToday, isUpcoming, type DoctorDashboardData } from "@/services/doctor-dashboard.service";
 import type { AppointmentWithPatient } from "@/types";
 
@@ -52,31 +52,45 @@ export default function DoctorDashboardPage() {
 
   async function accept(item: AppointmentWithPatient) {
     setSaving(true);
-    await acceptAppointment(item.id);
-    setSaving(false);
-    pushToast("Đã chấp nhận lịch hẹn");
-    await load();
+    try {
+      await acceptAppointment(item.id);
+      pushToast("Đã chấp nhận lịch hẹn");
+      await load();
+    } catch (actionError) {
+      pushToast("Thao tác thất bại", actionError instanceof Error ? actionError.message : "Vui lòng thử lại.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  async function confirmReject(reason: string) {
+  async function confirmReject(payload: DoctorRejectPayload) {
     if (!selected) return;
     setSaving(true);
-    await rejectAppointment(selected.id, reason);
-    setSaving(false);
-    setDialog(null);
-    pushToast("Đã từ chối lịch hẹn");
-    await load();
+    try {
+      await rejectAppointment(selected.id, payload.reason, payload.shouldReopenSlot);
+      setDialog(null);
+      pushToast("Đã từ chối lịch hẹn");
+      await load();
+    } catch (actionError) {
+      pushToast("Thao tác thất bại", actionError instanceof Error ? actionError.message : "Vui lòng thử lại.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function confirmComplete(note: string) {
     if (!selected) return;
     setSaving(true);
-    await createDoctorNote({ doctor_id: doctor.id, patient_id: selected.patient_id, appointment_id: selected.id, note });
-    await completeAppointment(selected.id);
-    setSaving(false);
-    setDialog(null);
-    pushToast("Đã hoàn thành lịch hẹn");
-    await load();
+    try {
+      await completeAppointment(selected.id, note);
+      setDialog(null);
+      pushToast("Đã hoàn thành lịch hẹn");
+      await load();
+    } catch (actionError) {
+      pushToast("Thao tác thất bại", actionError instanceof Error ? actionError.message : "Vui lòng thử lại.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (loading) return <LoadingState />;
@@ -106,7 +120,7 @@ export default function DoctorDashboardPage() {
         }}
       />
       <DoctorSchedulePreview slots={schedules} />
-      <DoctorRejectAppointmentDialog open={dialog === "reject"} loading={saving} onClose={() => setDialog(null)} onConfirm={confirmReject} />
+      <DoctorRejectAppointmentDialog appointment={selected} open={dialog === "reject"} loading={saving} onClose={() => setDialog(null)} onConfirm={confirmReject} />
       <DoctorCompleteAppointmentDialog open={dialog === "complete"} loading={saving} onClose={() => setDialog(null)} onConfirm={confirmComplete} />
     </section>
   );

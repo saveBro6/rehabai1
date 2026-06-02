@@ -21,7 +21,6 @@ export type Database = {
       }>;
       patients: TableDefinition<{
         id: string;
-        account_id: string;
         full_name: string;
         phone: string | null;
         date_of_birth: string | null;
@@ -31,7 +30,6 @@ export type Database = {
       }>;
       doctors: TableDefinition<{
         id: string;
-        account_id: string | null;
         full_name: string;
         specialty: string;
         avatar_url: string | null;
@@ -48,13 +46,21 @@ export type Database = {
         deleted_at: string | null;
         created_at: string;
       }>;
+      doctor_public_contacts: TableDefinition<{
+        doctor_id: string;
+        public_phone: string | null;
+        public_email: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
       appointments: TableDefinition<{
         id: string;
         doctor_id: string;
         patient_id: string;
+        doctor_schedule_slot_id: string | null;
         appointment_date: string;
         appointment_time: string;
-        consultation_type: "online";
+        consultation_type: "online" | "home_treatment";
         symptoms_description: string | null;
         status: "pending" | "confirmed" | "completed" | "cancelled" | "rejected";
         payment_status: "unpaid" | "paid" | "refunded";
@@ -135,6 +141,23 @@ export type Database = {
         cancelled_at: string | null;
         cancellation_note: string | null;
         created_at: string;
+        updated_at: string;
+      }>;
+      appointment_contacts: TableDefinition<{
+        id: string;
+        appointment_id: string;
+        patient_id: string;
+        contact_phone: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+      appointment_home_visits: TableDefinition<{
+        id: string;
+        appointment_id: string;
+        patient_id: string;
+        home_address: string;
+        created_at: string;
+        updated_at: string;
       }>;
       order_items: TableDefinition<{
         id: string;
@@ -285,6 +308,53 @@ export type Database = {
       confirm_patient_order_received: {
         Args: { target_order_id: string };
         Returns: Database["public"]["Tables"]["shipments"]["Row"];
+      };
+      book_doctor_slot: {
+        Args: {
+          target_doctor_id: string;
+          target_slot_id: string;
+          symptoms?: string | null;
+          requested_consultation_type?: "online" | "home_treatment";
+          contact_phone?: string | null;
+          home_address?: string | null;
+        };
+        Returns: string;
+      };
+      cancel_patient_appointment: {
+        Args: { target_appointment_id: string; cancellation_reason: string };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      confirm_doctor_appointment: {
+        Args: { target_appointment_id: string };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      reject_doctor_appointment: {
+        Args: { target_appointment_id: string; rejection_reason: string; should_reopen_slot?: boolean | null };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      cancel_doctor_appointment: {
+        Args: { target_appointment_id: string; cancellation_reason: string };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      complete_doctor_appointment: {
+        Args: { target_appointment_id: string; note?: string | null };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      create_doctor_schedule_slot: {
+        Args: { target_slot_date: string; target_start_time: string; duration_minutes?: number };
+        Returns: Database["public"]["Tables"]["doctor_schedule_slots"]["Row"];
+      };
+      request_flexible_appointment: {
+        Args: {
+          target_doctor_id: string;
+          preferred_date: string;
+          preferred_time: string;
+          symptoms?: string | null;
+          requested_consultation_type?: "online" | "home_treatment";
+          contact_phone?: string | null;
+          home_address?: string | null;
+        };
+        Returns: string;
       };
     };
     Enums: Record<string, never>;

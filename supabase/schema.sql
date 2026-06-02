@@ -12,7 +12,6 @@ create table if not exists public.accounts (
 
 create table if not exists public.patients (
   id uuid primary key default gen_random_uuid(),
-  account_id uuid not null unique references public.accounts(id) on delete cascade,
   full_name text not null,
   phone text,
   date_of_birth date,
@@ -23,7 +22,6 @@ create table if not exists public.patients (
 
 create table if not exists public.doctors (
   id uuid primary key default gen_random_uuid(),
-  account_id uuid unique references public.accounts(id) on delete set null,
   full_name text not null,
   specialty text not null,
   avatar_url text,
@@ -41,13 +39,22 @@ create table if not exists public.doctors (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.doctor_public_contacts (
+  doctor_id uuid primary key references public.doctors(id) on delete cascade,
+  public_phone text,
+  public_email text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.appointments (
   id uuid primary key default gen_random_uuid(),
   doctor_id uuid not null references public.doctors(id) on delete cascade,
   patient_id uuid not null references public.patients(id) on delete cascade,
+  doctor_schedule_slot_id uuid,
   appointment_date date not null,
   appointment_time time not null,
-  consultation_type text not null check (consultation_type in ('online')),
+  consultation_type text not null check (consultation_type in ('online', 'home_treatment')),
   symptoms_description text,
   status text not null default 'pending' check (status in ('pending', 'confirmed', 'completed', 'cancelled', 'rejected')),
   payment_status text not null default 'unpaid' check (payment_status in ('unpaid', 'paid', 'refunded')),
@@ -56,7 +63,26 @@ create table if not exists public.appointments (
   reject_reason text,
   reschedule_note text,
   completed_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.appointment_contacts (
+  id uuid primary key default gen_random_uuid(),
+  appointment_id uuid not null unique references public.appointments(id) on delete cascade,
+  patient_id uuid not null references public.patients(id) on delete cascade,
+  contact_phone text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.appointment_home_visits (
+  id uuid primary key default gen_random_uuid(),
+  appointment_id uuid not null unique references public.appointments(id) on delete cascade,
+  patient_id uuid not null references public.patients(id) on delete cascade,
+  home_address text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.doctor_schedule_slots (
@@ -71,6 +97,21 @@ create table if not exists public.doctor_schedule_slots (
   check (end_time > start_time),
   unique (doctor_id, slot_date, start_time)
 );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'appointments_doctor_schedule_slot_id_fkey'
+  ) then
+    alter table public.appointments
+    add constraint appointments_doctor_schedule_slot_id_fkey
+    foreign key (doctor_schedule_slot_id)
+    references public.doctor_schedule_slots(id)
+    on delete set null;
+  end if;
+end $$;
 
 create table if not exists public.doctor_notes (
   id uuid primary key default gen_random_uuid(),
@@ -262,11 +303,13 @@ create table if not exists public.exercise_logs (
 );
 
 create index if not exists idx_doctors_specialty on public.doctors (specialty);
-create index if not exists idx_doctors_account on public.doctors (account_id);
 create index if not exists idx_doctors_public_visibility on public.doctors (public_profile_status, id) where deleted_at is null;
 create index if not exists idx_appointments_patient on public.appointments (patient_id);
 create index if not exists idx_appointments_doctor on public.appointments (doctor_id);
 create index if not exists idx_appointments_doctor_date_status on public.appointments (doctor_id, appointment_date, status);
+create index if not exists idx_appointments_doctor_schedule_slot on public.appointments (doctor_schedule_slot_id);
+create index if not exists idx_appointment_contacts_patient on public.appointment_contacts (patient_id);
+create index if not exists idx_appointment_home_visits_patient on public.appointment_home_visits (patient_id);
 create index if not exists idx_doctor_schedule_slots_doctor_date on public.doctor_schedule_slots (doctor_id, slot_date, start_time);
 create index if not exists idx_doctor_notes_doctor_created on public.doctor_notes (doctor_id, created_at desc);
 create index if not exists idx_notifications_account_created on public.notifications (account_id, created_at desc);
@@ -288,7 +331,10 @@ create index if not exists idx_exercise_logs_user_completed on public.exercise_l
 alter table public.accounts enable row level security;
 alter table public.patients enable row level security;
 alter table public.doctors enable row level security;
+alter table public.doctor_public_contacts enable row level security;
 alter table public.appointments enable row level security;
+alter table public.appointment_contacts enable row level security;
+alter table public.appointment_home_visits enable row level security;
 alter table public.doctor_schedule_slots enable row level security;
 alter table public.doctor_notes enable row level security;
 alter table public.notifications enable row level security;
@@ -310,7 +356,10 @@ revoke all privileges on table public.accounts from public, anon, authenticated;
 revoke all privileges on table public.patients from public, anon, authenticated;
 revoke all privileges on table public.chatbot_messages from public, anon, authenticated;
 revoke all privileges on table public.doctors from public, anon, authenticated;
+revoke all privileges on table public.doctor_public_contacts from public, anon, authenticated;
 revoke all privileges on table public.appointments from public, anon, authenticated;
+revoke all privileges on table public.appointment_contacts from public, anon, authenticated;
+revoke all privileges on table public.appointment_home_visits from public, anon, authenticated;
 revoke all privileges on table public.doctor_schedule_slots from public, anon, authenticated;
 revoke all privileges on table public.doctor_notes from public, anon, authenticated;
 revoke all privileges on table public.notifications from public, anon, authenticated;
@@ -327,8 +376,36 @@ revoke all privileges on table public.recovery_plan_exercises from public, anon,
 revoke all privileges on table public.exercise_logs from public, anon, authenticated;
 grant select, insert, update on public.accounts to authenticated;
 grant select, insert, update on public.patients to authenticated;
-grant select on public.doctors, public.products, public.product_categories, public.subscriptions, public.exercises to anon, authenticated;
+grant select on public.doctors, public.products, public.product_categories, public.subscriptions, public.exercises to authenticated;
+grant select on public.doctor_public_contacts to anon, authenticated;
+grant insert, update on public.doctor_public_contacts to authenticated;
+grant select on public.products, public.product_categories, public.subscriptions, public.exercises to anon;
+grant select on public.appointment_contacts, public.appointment_home_visits to authenticated;
+grant select (
+  id,
+  full_name,
+  specialty,
+  avatar_url,
+  bio,
+  experience_years,
+  rating,
+  consultation_fee,
+  available_online,
+  public_profile_status,
+  deleted_at,
+  created_at
+) on public.doctors to anon;
 grant select (id, account_type, account_status) on public.accounts to anon;
+grant select (
+  id,
+  doctor_id,
+  slot_date,
+  start_time,
+  end_time,
+  status,
+  created_at,
+  updated_at
+) on public.doctor_schedule_slots to anon;
 grant insert, update on public.products to authenticated;
 grant insert, update, delete on public.product_categories to authenticated;
 grant select, insert, update, delete on public.appointments, public.cart_items, public.orders, public.order_items to authenticated;
@@ -339,7 +416,8 @@ grant select, insert, update, delete on public.doctor_schedule_slots to authenti
 grant select, insert, update, delete on public.doctor_notes to authenticated;
 grant select, update on public.notifications to authenticated;
 grant update (full_name, specialty, avatar_url, bio, experience_years, consultation_fee, available_online) on public.doctors to authenticated;
-grant update (status, meeting_url, cancel_reason, reject_reason, reschedule_note, completed_at) on public.appointments to authenticated;
+revoke insert, update, delete on public.appointments from authenticated;
+grant update (reschedule_note) on public.appointments to authenticated;
 
 create policy "Accounts can insert own row"
 on public.accounts
@@ -401,13 +479,13 @@ create policy "Patients can insert own profile"
 on public.patients
 for insert
 to authenticated
-with check (account_id = (select auth.uid()));
+with check (id = (select auth.uid()));
 
 create policy "Patients can read own profile"
 on public.patients
 for select
 to authenticated
-using (account_id = (select auth.uid()));
+using (id = (select auth.uid()));
 
 drop policy if exists "Admins can read patient profiles" on public.patients;
 create policy "Admins can read patient profiles"
@@ -420,8 +498,8 @@ create policy "Patients can update own profile"
 on public.patients
 for update
 to authenticated
-using (account_id = (select auth.uid()))
-with check (account_id = (select auth.uid()));
+using (id = (select auth.uid()))
+with check (id = (select auth.uid()));
 
 create policy "Doctors can read related patients"
 on public.patients
@@ -430,9 +508,8 @@ to authenticated
 using (
   exists (
     select 1
-    from public.doctors
-    join public.appointments on public.appointments.doctor_id = public.doctors.id
-    where public.doctors.account_id = (select auth.uid())
+    from public.appointments
+    where public.appointments.doctor_id = (select auth.uid())
       and public.appointments.patient_id = public.patients.id
   )
 );
@@ -504,6 +581,73 @@ using (
       and accounts.account_status = 'active'
   )
 );
+
+drop policy if exists "Public can read approved doctor public contacts" on public.doctor_public_contacts;
+create policy "Public can read approved doctor public contacts"
+on public.doctor_public_contacts
+for select
+to anon, authenticated
+using (
+  exists (
+    select 1
+    from public.doctors
+    join public.accounts on public.accounts.id = public.doctors.id
+    where public.doctors.id = public.doctor_public_contacts.doctor_id
+      and public.doctors.public_profile_status = 'approved'
+      and public.doctors.deleted_at is null
+      and public.accounts.account_type = 'doctor'
+      and public.accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Doctors can read own public contact" on public.doctor_public_contacts;
+create policy "Doctors can read own public contact"
+on public.doctor_public_contacts
+for select
+to authenticated
+using (
+  doctor_id = (select auth.uid())
+  and public.is_active_doctor_account((select auth.uid()))
+);
+
+drop policy if exists "Doctors can insert own public contact" on public.doctor_public_contacts;
+create policy "Doctors can insert own public contact"
+on public.doctor_public_contacts
+for insert
+to authenticated
+with check (
+  doctor_id = (select auth.uid())
+  and public.is_active_doctor_account((select auth.uid()))
+);
+
+drop policy if exists "Doctors can update own public contact" on public.doctor_public_contacts;
+create policy "Doctors can update own public contact"
+on public.doctor_public_contacts
+for update
+to authenticated
+using (
+  doctor_id = (select auth.uid())
+  and public.is_active_doctor_account((select auth.uid()))
+)
+with check (
+  doctor_id = (select auth.uid())
+  and public.is_active_doctor_account((select auth.uid()))
+);
+
+drop policy if exists "Admins can read doctor public contacts" on public.doctor_public_contacts;
+create policy "Admins can read doctor public contacts"
+on public.doctor_public_contacts
+for select
+to authenticated
+using (public.is_active_admin_account((select auth.uid())));
+
+drop policy if exists "Admins can update doctor public contacts" on public.doctor_public_contacts;
+create policy "Admins can update doctor public contacts"
+on public.doctor_public_contacts
+for update
+to authenticated
+using (public.is_active_admin_account((select auth.uid())))
+with check (public.is_active_admin_account((select auth.uid())));
 
 drop policy if exists "Exercises are publicly readable" on public.exercises;
 create policy "Exercises are publicly readable"
@@ -877,7 +1021,7 @@ begin
 
   v_reason := nullif(btrim(reason), '');
   if v_reason is null then
-    raise exception 'Cancellation reason is required.';
+    raise exception 'Vui lòng nhập lý do hủy.';
   end if;
 
   select *
@@ -1432,6 +1576,714 @@ revoke execute on function public.checkout_patient_cart(text) from public;
 revoke execute on function public.checkout_patient_cart(text) from anon;
 grant execute on function public.checkout_patient_cart(text) to authenticated;
 
+create or replace function public.book_doctor_slot(
+  target_doctor_id uuid,
+  target_slot_id uuid,
+  symptoms text default null,
+  requested_consultation_type text default 'online',
+  contact_phone text default null,
+  home_address text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_patient_id uuid;
+  v_slot public.doctor_schedule_slots%rowtype;
+  v_appointment_id uuid;
+  v_consultation_type text;
+  v_contact_phone text;
+  v_home_address text;
+begin
+  v_patient_id := auth.uid();
+  v_consultation_type := coalesce(nullif(btrim(requested_consultation_type), ''), 'online');
+  v_contact_phone := regexp_replace(coalesce(contact_phone, ''), '\D', '', 'g');
+  v_home_address := nullif(btrim(home_address), '');
+
+  if v_patient_id is null then
+    raise exception 'Authentication is required.';
+  end if;
+
+  if v_consultation_type not in ('online', 'home_treatment') then
+    raise exception 'Unsupported consultation type.';
+  end if;
+
+  if v_contact_phone !~ '^[0-9]{9,11}$' then
+    raise exception 'A valid contact phone number is required.';
+  end if;
+
+  if v_consultation_type = 'home_treatment' and v_home_address is null then
+    raise exception 'Home address is required for home treatment.';
+  end if;
+
+  if v_consultation_type = 'online' then
+    v_home_address := null;
+  end if;
+
+  if not exists (
+    select 1
+    from public.accounts
+    where accounts.id = v_patient_id
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  ) then
+    raise exception 'Only active Patient accounts can book appointments.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.doctors
+    join public.accounts on accounts.id = doctors.id
+    where doctors.id = target_doctor_id
+      and doctors.public_profile_status = 'approved'
+      and doctors.deleted_at is null
+      and accounts.account_type = 'doctor'
+      and accounts.account_status = 'active'
+  ) then
+    raise exception 'Doctor is not available for public booking.';
+  end if;
+
+  select *
+    into v_slot
+  from public.doctor_schedule_slots
+  where id = target_slot_id
+    and doctor_id = target_doctor_id
+  for update;
+
+  if v_slot.id is null then
+    raise exception 'Schedule slot was not found.';
+  end if;
+
+  if v_slot.status <> 'available' then
+    raise exception 'Schedule slot is no longer available.';
+  end if;
+
+  if not (
+    v_slot.slot_date > current_date
+    or (
+      v_slot.slot_date = current_date
+      and v_slot.start_time > current_time
+    )
+  ) then
+    raise exception 'Schedule slot is no longer in the future.';
+  end if;
+
+  update public.doctor_schedule_slots
+  set status = 'booked',
+      updated_at = now()
+  where id = target_slot_id
+    and status = 'available';
+
+  insert into public.appointments (
+    doctor_id,
+    patient_id,
+    doctor_schedule_slot_id,
+    appointment_date,
+    appointment_time,
+    consultation_type,
+    symptoms_description,
+    status,
+    payment_status,
+    updated_at
+  )
+  values (
+    target_doctor_id,
+    v_patient_id,
+    target_slot_id,
+    v_slot.slot_date,
+    v_slot.start_time,
+    v_consultation_type,
+    nullif(btrim(symptoms), ''),
+    'pending',
+    'unpaid',
+    now()
+  )
+  returning id into v_appointment_id;
+
+  insert into public.appointment_contacts (appointment_id, patient_id, contact_phone)
+  values (v_appointment_id, v_patient_id, v_contact_phone);
+
+  if v_consultation_type = 'home_treatment' then
+    insert into public.appointment_home_visits (appointment_id, patient_id, home_address)
+    values (v_appointment_id, v_patient_id, v_home_address);
+  end if;
+
+  return v_appointment_id;
+end;
+$$;
+
+create or replace function public.cancel_patient_appointment(
+  target_appointment_id uuid,
+  cancellation_reason text
+)
+returns public.appointments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_patient_id uuid;
+  v_appointment public.appointments%rowtype;
+  v_reason text;
+begin
+  v_patient_id := auth.uid();
+  v_reason := nullif(btrim(cancellation_reason), '');
+
+  if v_patient_id is null then
+    raise exception 'Authentication is required.';
+  end if;
+
+  if v_reason is null then
+    raise exception 'Cancellation reason is required.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.accounts
+    where accounts.id = v_patient_id
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  ) then
+    raise exception 'Only active Patient accounts can cancel their appointments.';
+  end if;
+
+  select *
+    into v_appointment
+  from public.appointments
+  where id = target_appointment_id
+    and patient_id = v_patient_id
+  for update;
+
+  if v_appointment.id is null then
+    raise exception 'Appointment not found.';
+  end if;
+
+  if v_appointment.status <> 'pending' then
+    raise exception 'Only pending appointments can be cancelled by Patient.';
+  end if;
+
+  update public.appointments
+  set status = 'cancelled',
+      cancel_reason = v_reason
+  where id = target_appointment_id
+  returning * into v_appointment;
+
+  if v_appointment.doctor_schedule_slot_id is not null then
+    update public.doctor_schedule_slots
+    set status = 'available',
+        updated_at = now()
+    where id = v_appointment.doctor_schedule_slot_id
+      and status = 'booked'
+      and (
+        slot_date > current_date
+        or (
+          slot_date = current_date
+          and start_time > current_time
+        )
+      );
+  end if;
+
+  return v_appointment;
+end;
+$$;
+
+create or replace function public.confirm_doctor_appointment(target_appointment_id uuid)
+returns public.appointments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_doctor_id uuid;
+  v_appointment public.appointments%rowtype;
+begin
+  v_doctor_id := auth.uid();
+
+  if not public.is_active_doctor_account(v_doctor_id) then
+    raise exception 'Only active Doctors can confirm appointments.';
+  end if;
+
+  select *
+    into v_appointment
+  from public.appointments
+  where id = target_appointment_id
+    and doctor_id = v_doctor_id
+  for update;
+
+  if v_appointment.id is null then
+    raise exception 'Appointment not found.';
+  end if;
+
+  if v_appointment.status <> 'pending' then
+    raise exception 'Only pending appointments can be confirmed.';
+  end if;
+
+  update public.appointments
+  set status = 'confirmed',
+      updated_at = now()
+  where id = target_appointment_id
+  returning * into v_appointment;
+
+  return v_appointment;
+end;
+$$;
+
+create or replace function public.reject_doctor_appointment(
+  target_appointment_id uuid,
+  rejection_reason text,
+  should_reopen_slot boolean
+)
+returns public.appointments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_doctor_id uuid;
+  v_appointment public.appointments%rowtype;
+  v_reason text;
+  v_slot public.doctor_schedule_slots%rowtype;
+begin
+  v_doctor_id := auth.uid();
+  v_reason := nullif(btrim(rejection_reason), '');
+
+  if not public.is_active_doctor_account(v_doctor_id) then
+    raise exception 'Only active Doctors can reject appointments.';
+  end if;
+
+  if v_reason is null then
+    raise exception 'Vui lòng nhập lý do từ chối.';
+  end if;
+
+  select *
+    into v_appointment
+  from public.appointments
+  where id = target_appointment_id
+    and doctor_id = v_doctor_id
+  for update;
+
+  if v_appointment.id is null then
+    raise exception 'Appointment not found.';
+  end if;
+
+  if v_appointment.status <> 'pending' then
+    raise exception 'Only pending appointments can be rejected.';
+  end if;
+
+  if v_appointment.doctor_schedule_slot_id is not null then
+    select *
+      into v_slot
+    from public.doctor_schedule_slots
+    where id = v_appointment.doctor_schedule_slot_id
+      and doctor_id = v_doctor_id
+    for update;
+
+    if v_slot.id is not null
+      and (
+        v_slot.slot_date > current_date
+        or (
+          v_slot.slot_date = current_date
+          and v_slot.start_time > current_time
+        )
+      )
+      and should_reopen_slot is null then
+      raise exception 'Please choose how to handle the linked schedule slot.';
+    end if;
+  end if;
+
+  update public.appointments
+  set status = 'rejected',
+      reject_reason = v_reason
+  where id = target_appointment_id
+  returning * into v_appointment;
+
+  if v_slot.id is not null
+    and (
+      v_slot.slot_date > current_date
+      or (
+        v_slot.slot_date = current_date
+        and v_slot.start_time > current_time
+      )
+    ) then
+    update public.doctor_schedule_slots
+    set status = case when should_reopen_slot then 'available' else 'blocked' end,
+        updated_at = now()
+    where id = v_slot.id
+      and status = 'booked';
+  end if;
+
+  return v_appointment;
+end;
+$$;
+
+create or replace function public.reject_doctor_appointment(
+  target_appointment_id uuid,
+  rejection_reason text
+)
+returns public.appointments
+language sql
+security definer
+set search_path = public
+as $$
+  select public.reject_doctor_appointment(target_appointment_id, rejection_reason, null::boolean);
+$$;
+
+create or replace function public.cancel_doctor_appointment(
+  target_appointment_id uuid,
+  cancellation_reason text
+)
+returns public.appointments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_doctor_id uuid;
+  v_appointment public.appointments%rowtype;
+  v_reason text;
+begin
+  v_doctor_id := auth.uid();
+  v_reason := nullif(btrim(cancellation_reason), '');
+
+  if not public.is_active_doctor_account(v_doctor_id) then
+    raise exception 'Only active Doctors can cancel appointments.';
+  end if;
+
+  if v_reason is null then
+    raise exception 'Cancellation reason is required.';
+  end if;
+
+  select *
+    into v_appointment
+  from public.appointments
+  where id = target_appointment_id
+    and doctor_id = v_doctor_id
+  for update;
+
+  if v_appointment.id is null then
+    raise exception 'Appointment not found.';
+  end if;
+
+  if v_appointment.status = 'completed' then
+    raise exception 'Không thể thay đổi lịch hẹn đã hoàn tất.';
+  end if;
+
+  if v_appointment.status <> 'pending' then
+    raise exception 'Chỉ có thể hủy lịch hẹn đang chờ xác nhận.';
+  end if;
+
+  update public.appointments
+  set status = 'cancelled',
+      cancel_reason = v_reason
+  where id = target_appointment_id
+  returning * into v_appointment;
+
+  if v_appointment.doctor_schedule_slot_id is not null then
+    update public.doctor_schedule_slots
+    set status = 'available',
+        updated_at = now()
+    where id = v_appointment.doctor_schedule_slot_id
+      and status = 'booked'
+      and (
+        slot_date > current_date
+        or (
+          slot_date = current_date
+          and start_time > current_time
+        )
+      );
+  end if;
+
+  return v_appointment;
+end;
+$$;
+
+create or replace function public.complete_doctor_appointment(
+  target_appointment_id uuid,
+  note text default null
+)
+returns public.appointments
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_doctor_id uuid;
+  v_appointment public.appointments%rowtype;
+  v_note text;
+begin
+  v_doctor_id := auth.uid();
+  v_note := nullif(btrim(note), '');
+
+  if not public.is_active_doctor_account(v_doctor_id) then
+    raise exception 'Only active Doctors can complete appointments.';
+  end if;
+
+  select *
+    into v_appointment
+  from public.appointments
+  where id = target_appointment_id
+    and doctor_id = v_doctor_id
+  for update;
+
+  if v_appointment.id is null then
+    raise exception 'Appointment not found.';
+  end if;
+
+  if v_appointment.status = 'completed' then
+    raise exception 'Không thể thay đổi lịch hẹn đã hoàn tất.';
+  end if;
+
+  if v_appointment.status <> 'confirmed' then
+    raise exception 'Chỉ có thể hoàn tất lịch hẹn đã được xác nhận.';
+  end if;
+
+  update public.appointments
+  set status = 'completed',
+      completed_at = now()
+  where id = target_appointment_id
+  returning * into v_appointment;
+
+  if v_note is not null then
+    insert into public.doctor_notes (
+      doctor_id,
+      patient_id,
+      appointment_id,
+      note
+    )
+    values (
+      v_appointment.doctor_id,
+      v_appointment.patient_id,
+      v_appointment.id,
+      v_note
+    );
+  end if;
+
+  return v_appointment;
+end;
+$$;
+
+revoke execute on function public.book_doctor_slot(uuid, uuid, text, text) from public;
+revoke execute on function public.book_doctor_slot(uuid, uuid, text, text) from anon;
+revoke execute on function public.book_doctor_slot(uuid, uuid, text, text) from authenticated;
+revoke execute on function public.book_doctor_slot(uuid, uuid, text, text, text, text) from public;
+revoke execute on function public.book_doctor_slot(uuid, uuid, text, text, text, text) from anon;
+grant execute on function public.book_doctor_slot(uuid, uuid, text, text, text, text) to authenticated;
+
+revoke execute on function public.cancel_patient_appointment(uuid, text) from public;
+revoke execute on function public.cancel_patient_appointment(uuid, text) from anon;
+grant execute on function public.cancel_patient_appointment(uuid, text) to authenticated;
+
+revoke execute on function public.confirm_doctor_appointment(uuid) from public;
+revoke execute on function public.confirm_doctor_appointment(uuid) from anon;
+grant execute on function public.confirm_doctor_appointment(uuid) to authenticated;
+
+revoke execute on function public.reject_doctor_appointment(uuid, text) from public;
+revoke execute on function public.reject_doctor_appointment(uuid, text) from anon;
+revoke execute on function public.reject_doctor_appointment(uuid, text) from authenticated;
+
+revoke execute on function public.reject_doctor_appointment(uuid, text, boolean) from public;
+revoke execute on function public.reject_doctor_appointment(uuid, text, boolean) from anon;
+grant execute on function public.reject_doctor_appointment(uuid, text, boolean) to authenticated;
+
+revoke execute on function public.cancel_doctor_appointment(uuid, text) from public;
+revoke execute on function public.cancel_doctor_appointment(uuid, text) from anon;
+grant execute on function public.cancel_doctor_appointment(uuid, text) to authenticated;
+
+revoke execute on function public.complete_doctor_appointment(uuid, text) from public;
+revoke execute on function public.complete_doctor_appointment(uuid, text) from anon;
+grant execute on function public.complete_doctor_appointment(uuid, text) to authenticated;
+
+create or replace function public.create_doctor_schedule_slot(
+  target_slot_date date,
+  target_start_time time,
+  duration_minutes integer default 60
+)
+returns public.doctor_schedule_slots
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_doctor_id uuid;
+  v_end_time time;
+  v_slot public.doctor_schedule_slots%rowtype;
+begin
+  v_doctor_id := auth.uid();
+
+  if not public.is_active_doctor_account(v_doctor_id) then
+    raise exception 'Only active Doctors can create schedule slots.';
+  end if;
+
+  if duration_minutes is null or duration_minutes <= 0 then
+    raise exception 'Duration must be positive.';
+  end if;
+
+  v_end_time := target_start_time + make_interval(mins => duration_minutes);
+
+  if v_end_time <= target_start_time then
+    raise exception 'End time must be after start time.';
+  end if;
+
+  if not (
+    target_slot_date > current_date
+    or (
+      target_slot_date = current_date
+      and target_start_time > current_time
+    )
+  ) then
+    raise exception 'Cannot create schedule slots in the past.';
+  end if;
+
+  insert into public.doctor_schedule_slots (
+    doctor_id,
+    slot_date,
+    start_time,
+    end_time,
+    status
+  )
+  values (
+    v_doctor_id,
+    target_slot_date,
+    target_start_time,
+    v_end_time,
+    'available'
+  )
+  returning * into v_slot;
+
+  return v_slot;
+end;
+$$;
+
+create or replace function public.request_flexible_appointment(
+  target_doctor_id uuid,
+  preferred_date date,
+  preferred_time time,
+  symptoms text default null,
+  requested_consultation_type text default 'online',
+  contact_phone text default null,
+  home_address text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_patient_id uuid;
+  v_appointment_id uuid;
+  v_consultation_type text;
+  v_contact_phone text;
+  v_home_address text;
+begin
+  v_patient_id := auth.uid();
+  v_consultation_type := coalesce(nullif(btrim(requested_consultation_type), ''), 'online');
+  v_contact_phone := regexp_replace(coalesce(contact_phone, ''), '\D', '', 'g');
+  v_home_address := nullif(btrim(home_address), '');
+
+  if v_patient_id is null then
+    raise exception 'Authentication is required.';
+  end if;
+
+  if v_consultation_type not in ('online', 'home_treatment') then
+    raise exception 'Unsupported consultation type.';
+  end if;
+
+  if v_contact_phone !~ '^[0-9]{9,11}$' then
+    raise exception 'A valid contact phone number is required.';
+  end if;
+
+  if v_consultation_type = 'home_treatment' and v_home_address is null then
+    raise exception 'Home address is required for home treatment.';
+  end if;
+
+  if v_consultation_type = 'online' then
+    v_home_address := null;
+  end if;
+
+  if not exists (
+    select 1
+    from public.accounts
+    where accounts.id = v_patient_id
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  ) then
+    raise exception 'Only active Patient accounts can request appointments.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.doctors
+    join public.accounts on accounts.id = doctors.id
+    where doctors.id = target_doctor_id
+      and doctors.public_profile_status = 'approved'
+      and doctors.deleted_at is null
+      and accounts.account_type = 'doctor'
+      and accounts.account_status = 'active'
+  ) then
+    raise exception 'Doctor is not available for public booking.';
+  end if;
+
+  if not (
+    preferred_date > current_date
+    or (
+      preferred_date = current_date
+      and preferred_time > current_time
+    )
+  ) then
+    raise exception 'Preferred appointment time must be in the future.';
+  end if;
+
+  insert into public.appointments (
+    doctor_id,
+    patient_id,
+    doctor_schedule_slot_id,
+    appointment_date,
+    appointment_time,
+    consultation_type,
+    symptoms_description,
+    status,
+    payment_status,
+    updated_at
+  )
+  values (
+    target_doctor_id,
+    v_patient_id,
+    null,
+    preferred_date,
+    preferred_time,
+    v_consultation_type,
+    nullif(btrim(symptoms), ''),
+    'pending',
+    'unpaid',
+    now()
+  )
+  returning id into v_appointment_id;
+
+  insert into public.appointment_contacts (appointment_id, patient_id, contact_phone)
+  values (v_appointment_id, v_patient_id, v_contact_phone);
+
+  if v_consultation_type = 'home_treatment' then
+    insert into public.appointment_home_visits (appointment_id, patient_id, home_address)
+    values (v_appointment_id, v_patient_id, v_home_address);
+  end if;
+
+  return v_appointment_id;
+end;
+$$;
+
+revoke execute on function public.create_doctor_schedule_slot(date, time, integer) from public;
+revoke execute on function public.create_doctor_schedule_slot(date, time, integer) from anon;
+grant execute on function public.create_doctor_schedule_slot(date, time, integer) to authenticated;
+
+revoke execute on function public.request_flexible_appointment(uuid, date, time, text, text) from public;
+revoke execute on function public.request_flexible_appointment(uuid, date, time, text, text) from anon;
+revoke execute on function public.request_flexible_appointment(uuid, date, time, text, text) from authenticated;
+revoke execute on function public.request_flexible_appointment(uuid, date, time, text, text, text, text) from public;
+revoke execute on function public.request_flexible_appointment(uuid, date, time, text, text, text, text) from anon;
+grant execute on function public.request_flexible_appointment(uuid, date, time, text, text, text, text) to authenticated;
+
 drop policy if exists "Subscriptions are publicly readable" on public.subscriptions;
 create policy "Subscriptions are publicly readable"
 on public.subscriptions
@@ -1552,6 +2404,62 @@ revoke execute on function public.review_doctor_public_profile(uuid, text, text)
 grant execute on function public.submit_doctor_public_profile(uuid) to authenticated;
 grant execute on function public.review_doctor_public_profile(uuid, text, text) to authenticated;
 
+drop policy if exists "Patients can read own appointment contacts" on public.appointment_contacts;
+create policy "Patients can read own appointment contacts"
+on public.appointment_contacts
+for select
+to authenticated
+using (patient_id = (select auth.uid()));
+
+drop policy if exists "Doctors can read assigned appointment contacts" on public.appointment_contacts;
+create policy "Doctors can read assigned appointment contacts"
+on public.appointment_contacts
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.appointments
+    where public.appointments.id = public.appointment_contacts.appointment_id
+      and public.appointments.doctor_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Admins can read appointment contacts" on public.appointment_contacts;
+create policy "Admins can read appointment contacts"
+on public.appointment_contacts
+for select
+to authenticated
+using (public.is_active_admin_account((select auth.uid())));
+
+drop policy if exists "Patients can read own appointment home visits" on public.appointment_home_visits;
+create policy "Patients can read own appointment home visits"
+on public.appointment_home_visits
+for select
+to authenticated
+using (patient_id = (select auth.uid()));
+
+drop policy if exists "Doctors can read assigned appointment home visits" on public.appointment_home_visits;
+create policy "Doctors can read assigned appointment home visits"
+on public.appointment_home_visits
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.appointments
+    where public.appointments.id = public.appointment_home_visits.appointment_id
+      and public.appointments.doctor_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Admins can read appointment home visits" on public.appointment_home_visits;
+create policy "Admins can read appointment home visits"
+on public.appointment_home_visits
+for select
+to authenticated
+using (public.is_active_admin_account((select auth.uid())));
+
 drop policy if exists "Doctors can manage own appointments" on public.appointments;
 create policy "Doctors can manage own appointments"
 on public.appointments
@@ -1562,7 +2470,7 @@ using (
     select 1
     from public.doctors
     where public.doctors.id = public.appointments.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 )
 with check (
@@ -1570,7 +2478,7 @@ with check (
     select 1
     from public.doctors
     where public.doctors.id = public.appointments.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 );
 
@@ -1584,7 +2492,7 @@ using (
     select 1
     from public.patients
     where public.patients.id = public.appointments.patient_id
-      and public.patients.account_id = (select auth.uid())
+      and public.patients.id = (select auth.uid())
   )
 )
 with check (
@@ -1592,7 +2500,7 @@ with check (
     select 1
     from public.patients
     where public.patients.id = public.appointments.patient_id
-      and public.patients.account_id = (select auth.uid())
+      and public.patients.id = (select auth.uid())
   )
 );
 
@@ -1606,7 +2514,7 @@ using (
     select 1
     from public.doctors
     where public.doctors.id = public.doctor_schedule_slots.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 )
 with check (
@@ -1614,7 +2522,37 @@ with check (
     select 1
     from public.doctors
     where public.doctors.id = public.doctor_schedule_slots.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
+  )
+);
+
+drop policy if exists "Public can read available doctor schedule slots" on public.doctor_schedule_slots;
+create policy "Public can read available doctor schedule slots"
+on public.doctor_schedule_slots
+for select
+to anon, authenticated
+using (
+  status = 'available'
+  and (
+    slot_date > current_date
+    or (
+      slot_date = current_date
+      and start_time > current_time
+    )
+  )
+  and exists (
+    select 1
+    from public.doctors
+    where public.doctors.id = public.doctor_schedule_slots.doctor_id
+      and public.doctors.public_profile_status = 'approved'
+      and public.doctors.deleted_at is null
+      and exists (
+        select 1
+        from public.accounts
+        where public.accounts.id = public.doctors.id
+          and public.accounts.account_type = 'doctor'
+          and public.accounts.account_status = 'active'
+      )
   )
 );
 
@@ -1628,7 +2566,7 @@ using (
     select 1
     from public.doctors
     where public.doctors.id = public.doctor_notes.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 )
 with check (
@@ -1636,7 +2574,7 @@ with check (
     select 1
     from public.doctors
     where public.doctors.id = public.doctor_notes.doctor_id
-      and public.doctors.account_id = (select auth.uid())
+      and public.doctors.id = (select auth.uid())
   )
 );
 
@@ -1660,9 +2598,8 @@ begin
   on conflict (id) do update
   set email = excluded.email;
 
-  insert into public.patients (id, account_id, full_name, phone)
+  insert into public.patients (id, full_name, phone)
   values (
-    new.id,
     new.id,
     coalesce(
       nullif(new.raw_user_meta_data ->> 'full_name', ''),
@@ -1671,7 +2608,7 @@ begin
     ),
     nullif(new.raw_user_meta_data ->> 'phone', '')
   )
-  on conflict (account_id) do update
+  on conflict (id) do update
   set
     full_name = excluded.full_name,
     phone = coalesce(excluded.phone, public.patients.phone);

@@ -5,8 +5,8 @@ import { useState } from "react";
 import { DoctorProfileForm, ErrorState } from "@/components/doctor/DoctorComponents";
 import { useDoctor } from "@/components/doctor/DoctorLayout";
 import { useToast } from "@/hooks/useToast";
-import { submitDoctorPublicProfile, updateDoctor, uploadDoctorAvatar } from "@/services/doctors.service";
-import type { Doctor } from "@/types";
+import { submitDoctorPublicProfile, updateDoctor, uploadDoctorAvatar, upsertDoctorPublicContact } from "@/services/doctors.service";
+import type { Doctor, DoctorPublicContact } from "@/types";
 
 export default function DoctorProfilePage() {
   const { doctor, reloadDoctor } = useDoctor();
@@ -15,7 +15,7 @@ export default function DoctorProfilePage() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [error, setError] = useState("");
 
-  async function submit(payload: Partial<Doctor>, avatarFile?: File | null) {
+  async function submit(payload: Partial<Doctor>, avatarFile?: File | null, publicContact?: Pick<DoctorPublicContact, "public_phone" | "public_email">) {
     setLoading(true);
     setError("");
     let uploadedAvatarPath: string | null = null;
@@ -29,6 +29,9 @@ export default function DoctorProfilePage() {
       }
 
       await updateDoctor(doctor.id, nextPayload);
+      if (publicContact) {
+        await upsertDoctorPublicContact(doctor.id, publicContact);
+      }
       await reloadDoctor();
       pushToast("Đã lưu hồ sơ bác sĩ", "Thông tin hồ sơ đã được cập nhật.");
     } catch (saveError) {

@@ -8,6 +8,19 @@ import { useToast } from "@/hooks/useToast";
 import { createDoctorScheduleSlot, getDoctorScheduleSlots, updateDoctorScheduleSlotStatus } from "@/services/doctor-schedules.service";
 import type { DoctorScheduleSlot, DoctorScheduleStatus } from "@/types";
 
+function addMinutesToTime(time: string, minutes: number) {
+  const [hours = 0, mins = 0] = time.split(":").map(Number);
+  const date = new Date(2000, 0, 1, hours, mins + minutes);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function isFutureDateTime(date: string, time: string) {
+  if (!date || !time) return false;
+  const [year = 0, month = 1, day = 1] = date.split("-").map(Number);
+  const [hours = 0, minutes = 0] = time.split(":").map(Number);
+  return new Date(year, month - 1, day, hours, minutes).getTime() > Date.now();
+}
+
 export default function DoctorSchedulesPage() {
   const { doctor } = useDoctor();
   const { pushToast } = useToast();
@@ -37,6 +50,18 @@ export default function DoctorSchedulesPage() {
       pushToast("Thiếu thông tin", "Vui lòng chọn ngày và giờ bắt đầu.");
       return;
     }
+
+    const endTime = addMinutesToTime(startTime, 60);
+    if (endTime <= startTime) {
+      pushToast("Giờ không hợp lệ", "Giờ kết thúc phải sau giờ bắt đầu.");
+      return;
+    }
+
+    if (!isFutureDateTime(date, startTime)) {
+      pushToast("Không thể tạo lịch rảnh", "Không thể tạo lịch rảnh trong quá khứ.");
+      return;
+    }
+
     setSaving(true);
     try {
       await createDoctorScheduleSlot(doctor.id, date, startTime);

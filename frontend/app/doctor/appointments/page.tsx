@@ -23,7 +23,6 @@ import {
   rejectAppointment,
   requestAppointmentReschedule
 } from "@/services/appointments.service";
-import { createDoctorNote } from "@/services/doctor-notes.service";
 import { isToday, isUpcoming } from "@/services/doctor-dashboard.service";
 import type { AppointmentWithPatient } from "@/types";
 
@@ -63,19 +62,29 @@ export default function DoctorAppointmentsPage() {
 
   async function accept(item: AppointmentWithPatient) {
     setSaving(true);
-    await acceptAppointment(item.id);
-    setSaving(false);
-    pushToast("Đã chấp nhận lịch hẹn");
-    await load();
+    try {
+      await acceptAppointment(item.id);
+      pushToast("Đã chấp nhận lịch hẹn");
+      await load();
+    } catch (actionError) {
+      pushToast("Thao tác thất bại", actionError instanceof Error ? actionError.message : "Vui lòng thử lại.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function withDialogAction(action: (value: string) => Promise<void>, success: string, value: string) {
     setSaving(true);
-    await action(value);
-    setSaving(false);
-    setDialog(null);
-    pushToast(success);
-    await load();
+    try {
+      await action(value);
+      setDialog(null);
+      pushToast(success);
+      await load();
+    } catch (actionError) {
+      pushToast("Thao tác thất bại", actionError instanceof Error ? actionError.message : "Vui lòng thử lại.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -110,10 +119,21 @@ export default function DoctorAppointmentsPage() {
         />
       ) : null}
       <DoctorRejectAppointmentDialog
+        appointment={selected}
         open={dialog === "reject"}
         loading={saving}
         onClose={() => setDialog(null)}
-        onConfirm={(reason) => selected ? withDialogAction(async (value) => { await rejectAppointment(selected.id, value); }, "Đã từ chối lịch hẹn", reason) : Promise.resolve()}
+        onConfirm={(payload) =>
+          selected
+            ? withDialogAction(
+                async () => {
+                  await rejectAppointment(selected.id, payload.reason, payload.shouldReopenSlot);
+                },
+                "Đã từ chối lịch hẹn",
+                payload.reason
+              )
+            : Promise.resolve()
+        }
       />
       <DoctorCancelAppointmentDialog
         open={dialog === "cancel"}
@@ -134,8 +154,7 @@ export default function DoctorAppointmentsPage() {
         onConfirm={(note) =>
           selected
             ? withDialogAction(async (value) => {
-                await createDoctorNote({ doctor_id: doctor.id, patient_id: selected.patient_id, appointment_id: selected.id, note: value });
-                await completeAppointment(selected.id);
+                await completeAppointment(selected.id, value);
               }, "Đã hoàn thành lịch hẹn", note)
             : Promise.resolve()
         }

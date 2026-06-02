@@ -4,7 +4,7 @@ export type PaymentStatus = "unpaid" | "paid" | "refunded";
 export type AccountStatus = "active" | "inactive" | "locked";
 export type DoctorScheduleStatus = "available" | "booked" | "blocked" | "cancelled";
 export type DoctorPublicProfileStatus = "draft" | "submitted" | "approved" | "rejected";
-export type ConsultationType = "online";
+export type ConsultationType = "online" | "home_treatment";
 export type ExerciseDifficulty = "beginner" | "intermediate" | "advanced" | "Cơ bản" | "Trung cấp" | "Nâng cao";
 export type PlanStatus = "active" | "paused" | "completed" | "cancelled";
 
@@ -20,7 +20,6 @@ export interface Account {
 
 export interface Patient {
   id: string;
-  account_id: string;
   full_name: string;
   phone?: string;
   date_of_birth?: string;
@@ -40,7 +39,6 @@ export interface User extends Patient {
 
 export interface Doctor {
   id: string;
-  account_id?: string | null;
   full_name: string;
   specialty: string;
   avatar_url?: string;
@@ -56,12 +54,22 @@ export interface Doctor {
   public_profile_rejection_reason?: string | null;
   deleted_at?: string | null;
   created_at?: string;
+  public_contact?: DoctorPublicContact | null;
+}
+
+export interface DoctorPublicContact {
+  doctor_id: string;
+  public_phone?: string | null;
+  public_email?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Appointment {
   id: string;
   doctor_id: string;
   patient_id: string;
+  doctor_schedule_slot_id?: string | null;
   appointment_date: string;
   appointment_time: string;
   consultation_type: ConsultationType;
@@ -74,10 +82,37 @@ export interface Appointment {
   reschedule_note?: string | null;
   completed_at?: string | null;
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface AppointmentContact {
+  id: string;
+  appointment_id: string;
+  patient_id: string;
+  contact_phone: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AppointmentHomeVisit {
+  id: string;
+  appointment_id: string;
+  patient_id: string;
+  home_address: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AppointmentWithPatient extends Appointment {
   patient?: User | null;
+  contact?: AppointmentContact | null;
+  home_visit?: AppointmentHomeVisit | null;
+}
+
+export interface AppointmentWithDoctor extends Appointment {
+  doctor?: Doctor | null;
+  contact?: AppointmentContact | null;
+  home_visit?: AppointmentHomeVisit | null;
 }
 
 export interface DoctorScheduleSlot {
