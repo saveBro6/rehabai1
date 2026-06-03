@@ -3,7 +3,8 @@ export type AppointmentStatus = "pending" | "confirmed" | "completed" | "cancell
 export type PaymentStatus = "unpaid" | "paid" | "refunded";
 export type AccountStatus = "active" | "inactive" | "locked";
 export type DoctorScheduleStatus = "available" | "booked" | "blocked" | "cancelled";
-export type ConsultationType = "online";
+export type DoctorPublicProfileStatus = "draft" | "submitted" | "approved" | "rejected";
+export type ConsultationType = "online" | "home_treatment";
 export type ExerciseDifficulty = "beginner" | "intermediate" | "advanced" | "Cơ bản" | "Trung cấp" | "Nâng cao";
 export type PlanStatus = "active" | "paused" | "completed" | "cancelled";
 
@@ -19,7 +20,6 @@ export interface Account {
 
 export interface Patient {
   id: string;
-  account_id: string;
   full_name: string;
   phone?: string;
   date_of_birth?: string;
@@ -31,6 +31,7 @@ export interface Patient {
 export interface User extends Patient {
   email: string;
   role: Role;
+  account_type: Account["account_type"];
   must_change_password?: boolean;
   account_status?: AccountStatus;
   created_at?: string;
@@ -38,7 +39,6 @@ export interface User extends Patient {
 
 export interface Doctor {
   id: string;
-  account_id?: string | null;
   full_name: string;
   specialty: string;
   avatar_url?: string;
@@ -47,13 +47,29 @@ export interface Doctor {
   rating: number;
   consultation_fee: number;
   available_online: boolean;
+  public_profile_status?: DoctorPublicProfileStatus;
+  public_profile_submitted_at?: string | null;
+  public_profile_reviewed_at?: string | null;
+  public_profile_reviewed_by?: string | null;
+  public_profile_rejection_reason?: string | null;
+  deleted_at?: string | null;
   created_at?: string;
+  public_contact?: DoctorPublicContact | null;
+}
+
+export interface DoctorPublicContact {
+  doctor_id: string;
+  public_phone?: string | null;
+  public_email?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Appointment {
   id: string;
   doctor_id: string;
   patient_id: string;
+  doctor_schedule_slot_id?: string | null;
   appointment_date: string;
   appointment_time: string;
   consultation_type: ConsultationType;
@@ -66,10 +82,37 @@ export interface Appointment {
   reschedule_note?: string | null;
   completed_at?: string | null;
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface AppointmentContact {
+  id: string;
+  appointment_id: string;
+  patient_id: string;
+  contact_phone: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AppointmentHomeVisit {
+  id: string;
+  appointment_id: string;
+  patient_id: string;
+  home_address: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AppointmentWithPatient extends Appointment {
   patient?: User | null;
+  contact?: AppointmentContact | null;
+  home_visit?: AppointmentHomeVisit | null;
+}
+
+export interface AppointmentWithDoctor extends Appointment {
+  doctor?: Doctor | null;
+  contact?: AppointmentContact | null;
+  home_visit?: AppointmentHomeVisit | null;
 }
 
 export interface DoctorScheduleSlot {
@@ -121,6 +164,20 @@ export interface Product {
   stock_quantity: number;
   is_recommended: boolean;
   created_at?: string;
+  is_active?: boolean;
+  deleted_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string | null;
+  deleted_at?: string | null;
 }
 
 export interface CartItem {

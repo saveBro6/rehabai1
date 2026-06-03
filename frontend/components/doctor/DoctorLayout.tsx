@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { clsx } from "@/lib/utils";
 import { getAuthRedirectPath } from "@/lib/auth-navigation";
+import { getDashboardHref } from "@/config/navigation";
 import { getDoctorByUserId } from "@/services/doctors.service";
 import type { Doctor } from "@/types";
 
@@ -74,7 +75,7 @@ export function DoctorLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isLoading || !profile) return;
-    if (profile.role === "doctor" && profile.must_change_password && pathname !== "/doctor/change-password") {
+    if (profile.account_type === "doctor" && profile.must_change_password && pathname !== "/doctor/change-password") {
       router.replace("/doctor/change-password");
     }
   }, [isLoading, pathname, profile, router]);
@@ -87,14 +88,14 @@ export function DoctorLayout({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated || !profile) return null;
 
-  if (profile.role !== "doctor") {
+  if (profile.account_type !== "doctor") {
     return (
       <section className="mx-auto max-w-3xl px-4 py-16">
         <Card className="text-center">
           <Stethoscope className="mx-auto h-10 w-10 text-emerald-600" />
           <h1 className="mt-4 text-2xl font-bold text-slate-950">Không có quyền truy cập</h1>
           <p className="mt-3 text-slate-600">Khu vực này chỉ dành cho tài khoản bác sĩ.</p>
-          <Link href="/patient/dashboard" className="mt-6 inline-flex">
+          <Link href={getDashboardHref(profile.account_type, profile.must_change_password)} className="mt-6 inline-flex">
             <Button>Về dashboard</Button>
           </Link>
         </Card>

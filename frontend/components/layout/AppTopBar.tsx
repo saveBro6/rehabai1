@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { LogIn, LogOut, Menu, ShoppingCart, UserRound } from "lucide-react";
 
 import { Button } from "@/components/Button";
-import { getPageTitle } from "@/config/navigation";
+import { getCartHref, getDashboardHref, getPageTitle, getProfileHref } from "@/config/navigation";
 import { getProtectedHref } from "@/lib/auth-navigation";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -16,10 +16,13 @@ type AppTopBarProps = {
 export function AppTopBar({ onMenuClick }: AppTopBarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, isLoading, signOut } = useAuth();
+  const { isAuthenticated, isLoading, profile, signOut } = useAuth();
   const title = getPageTitle(pathname);
-  const cartHref = isLoading ? "/patient/cart" : getProtectedHref(isAuthenticated, "/patient/cart");
-  const profileHref = isLoading ? "/patient/profile" : getProtectedHref(isAuthenticated, "/patient/profile");
+  const accountType = profile?.account_type;
+  const dashboardHref = isLoading ? "/patient/dashboard" : getProtectedHref(isAuthenticated, getDashboardHref(accountType, profile?.must_change_password));
+  const cartPath = getCartHref(accountType);
+  const cartHref = cartPath ? (isLoading ? cartPath : getProtectedHref(isAuthenticated, cartPath)) : null;
+  const profileHref = isLoading ? "/patient/profile" : getProtectedHref(isAuthenticated, getProfileHref(accountType));
 
   async function logout() {
     await signOut();
@@ -31,7 +34,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
       <div className="flex h-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <button
-            aria-label="Mở menu điều hướng"
+            aria-label="Mo menu dieu huong"
             className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500"
             onClick={onMenuClick}
             type="button"
@@ -48,19 +51,26 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           </div>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
-          <Link href={cartHref} aria-label="Giỏ hàng" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">
-            <ShoppingCart className="h-5 w-5" />
-          </Link>
+          {!isLoading && isAuthenticated ? (
+            <Link href={dashboardHref} className="hidden min-h-10 items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 md:inline-flex">
+              Tổng quan
+            </Link>
+          ) : null}
+          {cartHref ? (
+            <Link href={cartHref} aria-label="Giỏ hàng" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">
+              <ShoppingCart className="h-5 w-5" />
+            </Link>
+          ) : null}
           <Link href={profileHref} aria-label="Hồ sơ" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">
             <UserRound className="h-5 w-5" />
           </Link>
           {!isLoading && isAuthenticated ? (
             <>
               <Button variant="secondary" className="hidden border-emerald-200 text-emerald-700 hover:bg-emerald-50 sm:inline-flex" onClick={logout}>
-                Đăng xuất
+                Dang xuat
               </Button>
               <button
-                aria-label="Đăng xuất"
+                aria-label="Dang xuat"
                 className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 sm:hidden"
                 onClick={logout}
                 type="button"

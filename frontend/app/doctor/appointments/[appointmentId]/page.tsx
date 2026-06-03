@@ -22,7 +22,6 @@ import {
   rejectAppointment,
   requestAppointmentReschedule
 } from "@/services/appointments.service";
-import { createDoctorNote } from "@/services/doctor-notes.service";
 import type { AppointmentWithPatient } from "@/types";
 
 export default function DoctorAppointmentDetailPage({ params }: { params: { appointmentId: string } }) {
@@ -82,7 +81,13 @@ export default function DoctorAppointmentDetailPage({ params }: { params: { appo
         onComplete={() => setDialog("complete")}
         onReschedule={() => setDialog("reschedule")}
       />
-      <DoctorRejectAppointmentDialog open={dialog === "reject"} loading={saving} onClose={() => setDialog(null)} onConfirm={(reason) => run(async () => { await rejectAppointment(appointment.id, reason); }, "Đã từ chối lịch hẹn")} />
+      <DoctorRejectAppointmentDialog
+        appointment={appointment}
+        open={dialog === "reject"}
+        loading={saving}
+        onClose={() => setDialog(null)}
+        onConfirm={(payload) => run(async () => { await rejectAppointment(appointment.id, payload.reason, payload.shouldReopenSlot); }, "Đã từ chối lịch hẹn")}
+      />
       <DoctorCancelAppointmentDialog open={dialog === "cancel"} loading={saving} onClose={() => setDialog(null)} onConfirm={(reason) => run(async () => { await cancelAppointment(appointment.id, reason); }, "Đã hủy lịch hẹn")} />
       <DoctorRescheduleDialog open={dialog === "reschedule"} loading={saving} onClose={() => setDialog(null)} onConfirm={(note) => run(async () => { await requestAppointmentReschedule(appointment.id, note); }, "Đã gửi yêu cầu đổi lịch")} />
       <DoctorCompleteAppointmentDialog
@@ -91,8 +96,7 @@ export default function DoctorAppointmentDetailPage({ params }: { params: { appo
         onClose={() => setDialog(null)}
         onConfirm={(note) =>
           run(async () => {
-            await createDoctorNote({ doctor_id: doctor.id, patient_id: appointment.patient_id, appointment_id: appointment.id, note });
-            await completeAppointment(appointment.id);
+            await completeAppointment(appointment.id, note);
           }, "Đã hoàn thành lịch hẹn")
         }
       />

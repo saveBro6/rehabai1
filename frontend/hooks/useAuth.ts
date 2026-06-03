@@ -54,8 +54,8 @@ export function useAuth(): UseAuthResult {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      void loadProfile(session?.user ?? null);
-      setIsLoading(false);
+      setIsLoading(true);
+      void loadProfile(session?.user ?? null).finally(() => setIsLoading(false));
     });
 
     return () => {

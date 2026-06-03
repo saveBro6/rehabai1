@@ -10,6 +10,20 @@ import { useToast } from "@/hooks/useToast";
 import { getSupabaseClient, getSupabaseConfigError } from "@/lib/supabase-client";
 import { isSafeRedirectPath } from "@/lib/auth-navigation";
 import { getUserProfile } from "@/services/users.service";
+import { getDashboardHref } from "@/config/navigation";
+import type { User as AppUserProfile } from "@/types";
+
+function getDefaultRoute(userProfile: AppUserProfile) {
+  return getDashboardHref(userProfile.account_type, userProfile.must_change_password);
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return "Unknown error.";
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -33,19 +47,44 @@ function LoginForm() {
 
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
 
     if (error) {
+      setLoading(false);
       pushToast("Đăng nhập thất bại", error.message);
       return;
     }
 
-    const userProfile = data.user ? await getUserProfile(data.user.id) : null;
+    let userProfile: AppUserProfile | null = null;
+    try {
+      userProfile = data.user ? await getUserProfile(data.user.id) : null;
+    } catch (profileError) {
+      setLoading(false);
+      await supabase.auth.signOut();
+      const detail = process.env.NODE_ENV !== "production" ? `Profile query failed: ${getErrorMessage(profileError)}` : "Khong the tai thong tin tai khoan.";
+      pushToast("Khong the tai ho so", detail);
+      return;
+    }
+
+    if (!userProfile) {
+      setLoading(false);
+      await supabase.auth.signOut();
+      pushToast("Khong tim thay tai khoan", "Auth thanh cong nhung khong co ho so trong accounts.");
+      return;
+    }
+
+    if (userProfile.account_status && userProfile.account_status !== "active") {
+      setLoading(false);
+      await supabase.auth.signOut();
+      pushToast("Tai khoan khong hoat dong", `Trang thai hien tai: ${userProfile.account_status}.`);
+      return;
+    }
+
     const redirectTo = searchParams.get("redirect");
-    const doctorDefault = userProfile?.role === "doctor" ? (userProfile.must_change_password ? "/doctor/change-password" : "/doctor/dashboard") : "/patient/dashboard";
-    const safeRedirect = isSafeRedirectPath(redirectTo) ? redirectTo : doctorDefault;
+    const defaultRoute = getDefaultRoute(userProfile);
+    const safeRedirect = isSafeRedirectPath(redirectTo) ? redirectTo : defaultRoute;
     pushToast("Đăng nhập thành công", "Đang chuyển đến trang tiếp theo.");
-    router.push(safeRedirect || doctorDefault);
+    router.push(safeRedirect || defaultRoute);
+    setLoading(false);
   }
 
   return (

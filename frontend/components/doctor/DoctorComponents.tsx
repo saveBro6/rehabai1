@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes, useMemo, useState } from "react";
+import Image from "next/image";
+import { FormEvent, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes, useEffect, useMemo, useState } from "react";
 import { CalendarPlus, Check, Eye, RotateCcw, X } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { getImageUrl } from "@/lib/utils";
 import { addMinutesToTime } from "@/services/doctor-schedules.service";
 import type {
   AppointmentStatus,
   AppointmentWithPatient,
   Doctor,
+  DoctorPublicContact,
   DoctorNote,
   DoctorPatientSummary,
   DoctorScheduleSlot,
@@ -35,6 +38,38 @@ const paymentLabels: Record<PaymentStatus, string> = {
   refunded: "Đã hoàn tiền"
 };
 
+function consultationTypeLabel(value?: string | null) {
+  if (value === "home_treatment") return "Điều trị tại nhà";
+  if (value === "online") return "Tư vấn online";
+  return value || "Chưa có";
+}
+
+function appointmentContactPhone(appointment: Pick<AppointmentWithPatient, "contact" | "patient">) {
+  return appointment.contact?.contact_phone || appointment.patient?.phone || "Chưa có số điện thoại";
+}
+
+function appointmentHomeAddress(appointment: Pick<AppointmentWithPatient, "home_visit">) {
+  return appointment.home_visit?.home_address || "Chưa có địa chỉ";
+}
+
+function appointmentContactGuidance(appointment: Pick<AppointmentWithPatient, "consultation_type">) {
+  if (appointment.consultation_type === "home_treatment") return "Bác sĩ sẽ liên hệ qua số điện thoại để xác nhận địa chỉ và thời gian.";
+  return "Bác sĩ sẽ liên hệ qua số điện thoại khi lịch được xác nhận.";
+}
+
+function requestTypeLabel(appointment: Pick<AppointmentWithPatient, "doctor_schedule_slot_id">) {
+  return appointment.doctor_schedule_slot_id ? "Theo slot lịch trống" : "Yêu cầu thời gian linh hoạt";
+}
+
+function appointmentNextStep(appointment: Pick<AppointmentWithPatient, "status" | "doctor_schedule_slot_id">) {
+  if (appointment.status === "pending" && appointment.doctor_schedule_slot_id) return "Xác nhận, từ chối hoặc hủy trước khi tiếp nhận.";
+  if (appointment.status === "pending") return "Xác nhận thời gian linh hoạt, từ chối hoặc hủy trước khi tiếp nhận.";
+  if (appointment.status === "confirmed") return "Có thể hoàn tất sau buổi tư vấn. Hủy sau xác nhận đang được chặn trong MVP.";
+  if (appointment.status === "completed") return "Lịch hẹn đã hoàn tất. Không thể đổi trạng thái.";
+  if (appointment.status === "rejected") return "Lịch hẹn đã bị từ chối. Bệnh nhân chỉ thấy trạng thái và lý do từ chối.";
+  return "Lịch hẹn đã bị hủy. Slot tương lai đã được mở lại nếu còn hợp lệ.";
+}
+
 const scheduleLabels: Record<DoctorScheduleStatus, string> = {
   available: "Còn trống",
   booked: "Đã được đặt",
@@ -58,6 +93,12 @@ export function formatDateTime(value?: string | null) {
 
 export function formatTime(value?: string | null) {
   return value ? value.slice(0, 5) : "--:--";
+}
+
+function summarizeText(value?: string | null, maxLength = 120) {
+  const text = value?.trim();
+  if (!text) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
 export function StatusBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "success" | "warning" | "danger" }) {
@@ -131,7 +172,10 @@ export function DoctorPendingAppointments({
             <div>
               <p className="font-bold text-slate-950">{appointment.patient?.full_name || "Bệnh nhân"}</p>
               <p className="mt-1 text-sm text-slate-600">{formatDate(appointment.appointment_date)} · {formatTime(appointment.appointment_time)}</p>
-              <p className="mt-2 text-sm text-slate-600">{appointment.symptoms_description || "Không có ghi chú thể trạng."}</p>
+              {!appointment.doctor_schedule_slot_id ? <p className="mt-1 text-xs font-semibold text-emerald-700">Yêu cầu thời gian linh hoạt</p> : null}
+              <p className="mt-2 text-sm text-slate-600">Liên hệ: {appointmentContactPhone(appointment)}</p>
+              {appointment.consultation_type === "home_treatment" ? <p className="mt-1 text-sm text-slate-600">Địa chỉ: {appointmentHomeAddress(appointment)}</p> : null}
+              {appointment.symptoms_description ? <p className="mt-2 text-sm text-slate-600">Ghi chú: {summarizeText(appointment.symptoms_description)}</p> : null}
               <p className="mt-2 text-sm font-semibold text-emerald-700">Giá tư vấn hiển thị trong hồ sơ bác sĩ</p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -159,7 +203,8 @@ export function DoctorTodayAppointments({
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
             <div>
               <p className="font-bold text-slate-950">{formatTime(appointment.appointment_time)} · {appointment.patient?.full_name || "Bệnh nhân"}</p>
-              <p className="mt-1 break-all text-sm text-slate-600">{appointment.meeting_url || "Chưa có meeting URL."}</p>
+              <p className="mt-1 text-sm text-slate-600">Số điện thoại bệnh nhân: {appointmentContactPhone(appointment)}</p>
+              {appointment.consultation_type === "home_treatment" ? <p className="mt-1 text-sm text-slate-600">Địa chỉ điều trị tại nhà: {appointmentHomeAddress(appointment)}</p> : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <Link href={`/doctor/appointments/${appointment.id}`}><Button variant="secondary">Xem chi tiết</Button></Link>
@@ -208,19 +253,63 @@ function DoctorListSection({ title, empty, children }: { title: string; empty: s
 export function DoctorProfileForm({
   doctor,
   loading,
-  onAvatarUpload,
+  reviewSubmitting = false,
+  onSubmitForReview,
   onSubmit
 }: {
   doctor: Doctor;
   loading: boolean;
-  onSubmit: (payload: Partial<Doctor>) => Promise<void>;
-  onAvatarUpload?: (file: File) => Promise<string>;
+  reviewSubmitting?: boolean;
+  onSubmitForReview?: () => Promise<void>;
+  onSubmit: (payload: Partial<Doctor>, avatarFile?: File | null, publicContact?: Pick<DoctorPublicContact, "public_phone" | "public_email">) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(doctor);
-  const [uploading, setUploading] = useState(false);
+  const [publicContact, setPublicContact] = useState({
+    public_phone: doctor.public_contact?.public_phone || "",
+    public_email: doctor.public_contact?.public_email || ""
+  });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [contactError, setContactError] = useState("");
+
+  useEffect(() => {
+    setDraft(doctor);
+    setPublicContact({
+      public_phone: doctor.public_contact?.public_phone || "",
+      public_email: doctor.public_contact?.public_email || ""
+    });
+    setAvatarFile(null);
+    setAvatarPreviewUrl(null);
+    setContactError("");
+  }, [doctor]);
+
+  useEffect(() => {
+    if (!avatarFile) return undefined;
+
+    const objectUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [avatarFile]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const normalizedPhone = publicContact.public_phone.trim().replace(/[\s.-]/g, "");
+    const normalizedEmail = publicContact.public_email.trim();
+
+    if (normalizedPhone && !/^[0-9]{9,11}$/.test(normalizedPhone)) {
+      setContactError("Số điện thoại liên hệ không hợp lệ.");
+      return;
+    }
+
+    if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setContactError("Email liên hệ không hợp lệ.");
+      return;
+    }
+
+    setContactError("");
     await onSubmit({
       avatar_url: draft.avatar_url,
       full_name: draft.full_name,
@@ -228,32 +317,40 @@ export function DoctorProfileForm({
       bio: draft.bio,
       experience_years: Number(draft.experience_years) || 0,
       consultation_fee: Number(draft.consultation_fee) || 0
+    }, avatarFile, {
+      public_phone: normalizedPhone || null,
+      public_email: normalizedEmail || null
     });
   }
+
+  const avatarSrc = avatarPreviewUrl || getImageUrl(draft.avatar_url);
 
   return (
     <Card>
       <form onSubmit={submit} className="grid gap-4">
+        <DoctorPublicProfileReviewStatus doctor={doctor} loading={loading || reviewSubmitting} onSubmitForReview={onSubmitForReview} />
         <label className="grid gap-1.5">
           <span className="text-sm font-semibold text-slate-700">Upload ảnh đại diện</span>
+          <Image
+            alt="Doctor avatar preview"
+            className="h-28 w-28 rounded-lg border border-slate-200 object-cover"
+            height={112}
+            src={avatarSrc}
+            unoptimized
+            width={112}
+          />
           <input
             accept="image/*"
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            disabled={!onAvatarUpload || uploading}
+            disabled={loading}
             type="file"
-            onChange={async (event) => {
+            onChange={(event) => {
               const file = event.target.files?.[0];
-              if (!file || !onAvatarUpload) return;
-              setUploading(true);
-              try {
-                const avatarUrl = await onAvatarUpload(file);
-                setDraft({ ...draft, avatar_url: avatarUrl });
-              } finally {
-                setUploading(false);
-              }
+              if (!file) return;
+              setAvatarFile(file);
             }}
           />
-          {uploading ? <span className="text-xs font-semibold text-emerald-700">Đang upload ảnh...</span> : null}
+          {avatarFile ? <span className="text-xs font-semibold text-emerald-700">Ảnh mới sẽ được upload khi bấm Lưu thay đổi.</span> : null}
         </label>
         <DoctorInput label="Ảnh đại diện" value={draft.avatar_url || ""} onChange={(value) => setDraft({ ...draft, avatar_url: value })} placeholder="URL ảnh hoặc đường dẫn storage" />
         <DoctorInput label="Họ tên" value={draft.full_name} onChange={(value) => setDraft({ ...draft, full_name: value })} required />
@@ -261,6 +358,36 @@ export function DoctorProfileForm({
         <DoctorTextarea label="Bio" value={draft.bio || ""} onChange={(value) => setDraft({ ...draft, bio: value })} />
         <DoctorInput label="Số năm kinh nghiệm" type="number" value={String(draft.experience_years)} onChange={(value) => setDraft({ ...draft, experience_years: Number(value) })} min={0} />
         <DoctorInput label="Giá tư vấn" type="number" value={String(draft.consultation_fee)} onChange={(value) => setDraft({ ...draft, consultation_fee: Number(value) })} min={0} />
+        <div className="grid gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 p-4">
+          <div>
+            <p className="text-sm font-bold text-slate-900">Thông tin liên hệ công khai</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Thông tin này có thể hiển thị cho bệnh nhân để liên hệ sau khi đặt lịch hoặc trên hồ sơ công khai nếu được duyệt.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DoctorInput
+              label="Số điện thoại liên hệ công khai"
+              value={publicContact.public_phone}
+              onChange={(value) => {
+                setPublicContact((current) => ({ ...current, public_phone: value }));
+                if (contactError) setContactError("");
+              }}
+              placeholder="Ví dụ: 0901234567"
+            />
+            <DoctorInput
+              label="Email liên hệ công khai"
+              type="email"
+              value={publicContact.public_email}
+              onChange={(value) => {
+                setPublicContact((current) => ({ ...current, public_email: value }));
+                if (contactError) setContactError("");
+              }}
+              placeholder="contact@example.com"
+            />
+          </div>
+          {contactError ? <p className="text-sm font-semibold text-rose-700">{contactError}</p> : null}
+        </div>
         <div className="grid gap-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 sm:grid-cols-2">
           <p>Username: Không cho sửa</p>
           <p>Email: Không cho sửa</p>
@@ -271,6 +398,57 @@ export function DoctorProfileForm({
         <Button disabled={loading}>{loading ? "Đang lưu..." : "Lưu thay đổi"}</Button>
       </form>
     </Card>
+  );
+}
+
+function DoctorPublicProfileReviewStatus({
+  doctor,
+  loading,
+  onSubmitForReview
+}: {
+  doctor: Doctor;
+  loading: boolean;
+  onSubmitForReview?: () => Promise<void>;
+}) {
+  const status = doctor.public_profile_status || "draft";
+  const canSubmitForReview = status === "draft" || status === "rejected";
+  const statusLabels = {
+    draft: "Bản nháp",
+    submitted: "Đang chờ duyệt",
+    approved: "Đã được duyệt",
+    rejected: "Bị từ chối"
+  };
+  const statusTone: Record<typeof status, "neutral" | "success" | "warning" | "danger"> = {
+    draft: "neutral",
+    submitted: "warning",
+    approved: "success",
+    rejected: "danger"
+  };
+
+  return (
+    <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div className="grid gap-2">
+          <p className="text-sm font-semibold text-slate-500">Trạng thái hồ sơ công khai</p>
+          <StatusBadge tone={statusTone[status]}>{statusLabels[status]}</StatusBadge>
+        </div>
+        {canSubmitForReview && onSubmitForReview ? (
+          <Button disabled={loading} onClick={onSubmitForReview} type="button">
+            {loading ? "Đang gửi..." : "Gửi duyệt hồ sơ công khai"}
+          </Button>
+        ) : null}
+      </div>
+      <div className="grid gap-1 text-sm text-slate-600">
+        {doctor.public_profile_submitted_at ? <p>Đã gửi: {formatDateTime(doctor.public_profile_submitted_at)}</p> : null}
+        {doctor.public_profile_reviewed_at ? <p>Đã duyệt/xem xét: {formatDateTime(doctor.public_profile_reviewed_at)}</p> : null}
+        {status === "approved" ? <p>Hồ sơ chỉ hiển thị công khai khi tài khoản vẫn active và chưa bị xóa.</p> : null}
+        {status === "submitted" ? <p>Hồ sơ đang chờ Admin xem xét. Bạn vẫn có thể lưu các thay đổi được phép trong workspace.</p> : null}
+        {status === "rejected" && doctor.public_profile_rejection_reason ? (
+          <p className="font-semibold text-rose-700">Lý do từ chối: {doctor.public_profile_rejection_reason}</p>
+        ) : null}
+        {status === "approved" ? <p>Thay đổi hồ sơ sau khi được duyệt chưa tự động mở lại quy trình duyệt trong task này.</p> : null}
+      </div>
+    </div>
   );
 }
 
@@ -375,12 +553,14 @@ export function DoctorAppointmentTable({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-      <table className="min-w-[980px] w-full text-left text-sm">
+      <table className="min-w-[1120px] w-full text-left text-sm">
         <thead className="bg-slate-50 text-xs uppercase text-slate-500">
           <tr>
             <th className="px-4 py-3">Bệnh nhân</th>
             <th className="px-4 py-3">Ngày</th>
             <th className="px-4 py-3">Giờ</th>
+            <th className="px-4 py-3">Hình thức</th>
+            <th className="px-4 py-3">Loại yêu cầu</th>
             <th className="px-4 py-3">Trạng thái</th>
             <th className="px-4 py-3">Thanh toán</th>
             <th className="px-4 py-3">Ghi chú thể trạng</th>
@@ -390,12 +570,24 @@ export function DoctorAppointmentTable({
         <tbody className="divide-y divide-slate-100">
           {appointments.map((appointment) => (
             <tr key={appointment.id}>
-              <td className="px-4 py-3 font-semibold text-slate-950">{appointment.patient?.full_name || "Bệnh nhân"}</td>
+              <td className="px-4 py-3">
+                <p className="font-semibold text-slate-950">{appointment.patient?.full_name || "Bệnh nhân"}</p>
+                <p className="mt-1 text-xs text-slate-500">{appointmentContactPhone(appointment)}</p>
+                {appointment.consultation_type === "home_treatment" ? <p className="mt-1 text-xs text-slate-500">{appointmentHomeAddress(appointment)}</p> : null}
+              </td>
               <td className="px-4 py-3">{formatDate(appointment.appointment_date)}</td>
               <td className="px-4 py-3">{formatTime(appointment.appointment_time)}</td>
+              <td className="px-4 py-3">{consultationTypeLabel(appointment.consultation_type)}</td>
+              <td className="px-4 py-3">
+                <span className={appointment.doctor_schedule_slot_id ? "text-slate-600" : "font-semibold text-emerald-700"}>
+                  {requestTypeLabel(appointment)}
+                </span>
+              </td>
               <td className="px-4 py-3"><StatusBadge tone={appointmentTone(appointment.status)}>{appointmentStatusLabels[appointment.status]}</StatusBadge></td>
               <td className="px-4 py-3">{paymentLabels[appointment.payment_status || "unpaid"]}</td>
-              <td className="max-w-[240px] px-4 py-3 text-slate-600">{appointment.symptoms_description || "Không có"}</td>
+              <td className="max-w-[240px] px-4 py-3 text-slate-600">
+                {appointment.symptoms_description ? `Ghi chú: ${summarizeText(appointment.symptoms_description)}` : "—"}
+              </td>
               <td className="px-4 py-3">
                 <AppointmentActions appointment={appointment} onAccept={onAccept} onCancel={onCancel} onComplete={onComplete} onReject={onReject} onReschedule={onReschedule} />
               </td>
@@ -417,14 +609,19 @@ function AppointmentActions(props: {
 }) {
   const { appointment } = props;
   if (appointment.status === "pending") {
-    return <div className="flex flex-wrap gap-2"><Button onClick={() => props.onAccept(appointment)}>Chấp nhận</Button><Button variant="secondary" onClick={() => props.onReject(appointment)}>Từ chối</Button></div>;
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => props.onAccept(appointment)}>Chấp nhận</Button>
+        <Button variant="secondary" onClick={() => props.onReject(appointment)}>Từ chối</Button>
+        <Button variant="ghost" onClick={() => props.onCancel(appointment)}>Hủy lịch</Button>
+      </div>
+    );
   }
   if (appointment.status === "confirmed") {
     return (
       <div className="flex flex-wrap gap-2">
         <Link href={`/doctor/appointments/${appointment.id}`}><Button variant="secondary">Xem chi tiết</Button></Link>
         <Button variant="ghost" onClick={() => props.onReschedule(appointment)}>Yêu cầu đổi lịch</Button>
-        <Button variant="ghost" onClick={() => props.onCancel(appointment)}>Hủy lịch</Button>
         <Button onClick={() => props.onComplete(appointment)}>Hoàn thành</Button>
       </div>
     );
@@ -456,17 +653,44 @@ export function DoctorAppointmentDetail({
         <div className="grid gap-4">
           <DoctorPatientInfoCard appointment={appointment} />
           <DetailRow label="Ngày giờ tư vấn" value={`${formatDate(appointment.appointment_date)} · ${formatTime(appointment.appointment_time)}`} />
+          <DetailRow label="Hình thức tư vấn" value={consultationTypeLabel(appointment.consultation_type)} />
+          <DetailRow label="Số điện thoại liên hệ" value={appointmentContactPhone(appointment)} />
+          {appointment.consultation_type === "home_treatment" ? (
+            <DetailRow label="Địa chỉ điều trị tại nhà" value={appointmentHomeAddress(appointment)} />
+          ) : null}
+          <DetailRow label="Loại đặt lịch" value={requestTypeLabel(appointment)} />
           <DetailRow label="Trạng thái appointment" value={appointmentStatusLabels[appointment.status]} />
           <DetailRow label="Trạng thái thanh toán" value={paymentLabels[appointment.payment_status || "unpaid"]} />
-          <DetailRow label="Ghi chú thể trạng hiện tại" value={appointment.symptoms_description || "Không có"} />
-          <DetailRow label="Meeting URL" value={appointment.meeting_url || "Chưa có meeting URL"} />
+          <DetailRow label="Bước tiếp theo" value={appointmentNextStep(appointment)} />
+          <DetailRow label="Hướng dẫn liên hệ" value={appointmentContactGuidance(appointment)} />
+          <DetailRow label="Ghi chú thể trạng hiện tại" value={appointment.symptoms_description || "Không có mô tả thêm."} />
+          {appointment.completed_at ? <DetailRow label="Hoàn tất lúc" value={formatDateTime(appointment.completed_at)} /> : null}
           {appointment.cancel_reason ? <DetailRow label="Lý do hủy" value={appointment.cancel_reason} /> : null}
           {appointment.reject_reason ? <DetailRow label="Lý do từ chối" value={appointment.reject_reason} /> : null}
           {appointment.reschedule_note ? <DetailRow label="Yêu cầu đổi lịch" value={appointment.reschedule_note} /> : null}
         </div>
         <div className="grid content-start gap-2">
-          {appointment.status === "pending" ? <><Button onClick={onAccept}>Chấp nhận</Button><Button onClick={onReject} variant="secondary">Từ chối</Button></> : null}
-          {appointment.status === "confirmed" ? <><Button onClick={onComplete}>Hoàn thành</Button><Button onClick={onReschedule} variant="secondary">Yêu cầu đổi lịch</Button><Button onClick={onCancel} variant="ghost">Hủy lịch</Button></> : null}
+          {appointment.status === "pending" ? (
+            <>
+              <Button onClick={onAccept}>Chấp nhận</Button>
+              <Button onClick={onReject} variant="secondary">Từ chối</Button>
+              <Button onClick={onCancel} variant="ghost">Hủy lịch</Button>
+            </>
+          ) : null}
+          {appointment.status === "confirmed" ? (
+            <>
+              <Button onClick={onComplete}>Hoàn thành</Button>
+              <Button onClick={onReschedule} variant="secondary">Yêu cầu đổi lịch</Button>
+              <p className="rounded-lg bg-amber-50 p-3 text-sm font-semibold text-amber-700">
+                Hủy lịch sau khi đã xác nhận đang được chặn trong MVP.
+              </p>
+            </>
+          ) : null}
+          {appointment.status === "completed" ? (
+            <p className="rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+              Không thể thay đổi lịch hẹn đã hoàn tất.
+            </p>
+          ) : null}
         </div>
       </div>
     </Card>
@@ -483,7 +707,8 @@ export function DoctorPatientInfoCard({ appointment }: { appointment: Appointmen
     <div className="rounded-lg bg-slate-50 p-4">
       <p className="text-sm font-semibold text-slate-500">Thông tin bệnh nhân</p>
       <p className="mt-2 text-lg font-bold text-slate-950">{patient?.full_name || "Bệnh nhân"}</p>
-      <p className="text-sm text-slate-600">{patient?.phone || "Chưa có số điện thoại"}</p>
+      <p className="text-sm text-slate-600">{appointmentContactPhone(appointment)}</p>
+      {appointment.consultation_type === "home_treatment" ? <p className="text-sm text-slate-600">{appointmentHomeAddress(appointment)}</p> : null}
       <p className="text-sm text-slate-600">{patient?.date_of_birth ? formatDate(patient.date_of_birth) : "Chưa có ngày sinh"}</p>
       <p className="mt-2 text-sm text-slate-600">{patient?.medical_condition || "Chưa có tóm tắt tình trạng."}</p>
     </div>
@@ -572,15 +797,120 @@ export function DoctorCompleteAppointmentDialog({
   onClose,
   onConfirm
 }: DialogProps & { onConfirm: (note: string) => Promise<void> }) {
-  return <TextDialog open={open} loading={loading} title="Hoàn thành lịch hẹn" label="Ghi chú/kết luận sau tư vấn" action="Xác nhận hoàn thành" onClose={onClose} onConfirm={onConfirm} required />;
+  return <TextDialog open={open} loading={loading} title="Hoàn thành lịch hẹn" label="Ghi chú/kết luận sau tư vấn" action="Xác nhận hoàn thành" onClose={onClose} onConfirm={onConfirm} />;
 }
 
-export function DoctorRejectAppointmentDialog(props: DialogProps & { onConfirm: (reason: string) => Promise<void> }) {
-  return <TextDialog {...props} title="Từ chối lịch hẹn" label="Lý do từ chối" action="Xác nhận từ chối" required />;
+export type DoctorRejectPayload = {
+  reason: string;
+  shouldReopenSlot: boolean | null;
+};
+
+export function DoctorRejectAppointmentDialog({
+  open,
+  loading,
+  appointment,
+  onClose,
+  onConfirm
+}: DialogProps & {
+  appointment?: AppointmentWithPatient | null;
+  onConfirm: (payload: DoctorRejectPayload) => Promise<void>;
+}) {
+  const [reason, setReason] = useState("");
+  const [fieldError, setFieldError] = useState("");
+  const [shouldReopenSlot, setShouldReopenSlot] = useState(false);
+  const showSlotHandling = Boolean(appointment?.doctor_schedule_slot_id);
+
+  useEffect(() => {
+    if (!open) return;
+    setReason("");
+    setFieldError("");
+    setShouldReopenSlot(false);
+  }, [open, appointment?.id]);
+
+  function closeDialog() {
+    setReason("");
+    setFieldError("");
+    setShouldReopenSlot(false);
+    onClose();
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!reason.trim()) {
+      setFieldError("Vui lòng nhập lý do từ chối.");
+      return;
+    }
+
+    setFieldError("");
+    await onConfirm({
+      reason: reason.trim(),
+      shouldReopenSlot: showSlotHandling ? shouldReopenSlot : null
+    });
+  }
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4">
+      <Card className="w-full max-w-lg">
+        <form noValidate onSubmit={submit} className="grid gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold text-slate-950">Từ chối lịch hẹn</h2>
+            <button aria-label="Đóng" className="rounded-lg p-2 hover:bg-slate-100" onClick={closeDialog} type="button"><X className="h-5 w-5" /></button>
+          </div>
+          <DoctorTextarea
+            label="Lý do từ chối"
+            value={reason}
+            onChange={(nextValue) => {
+              setReason(nextValue);
+              if (fieldError && nextValue.trim()) setFieldError("");
+            }}
+            required
+          />
+          {fieldError ? <p className="text-sm font-semibold text-rose-700">{fieldError}</p> : null}
+          {showSlotHandling ? (
+            <fieldset className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <legend className="px-1 text-sm font-bold text-slate-800">Xử lý slot lịch trống</legend>
+              <label className="flex gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                <input
+                  checked={shouldReopenSlot}
+                  className="mt-1"
+                  name="slotHandling"
+                  type="radio"
+                  onChange={() => setShouldReopenSlot(true)}
+                />
+                <span>
+                  <span className="block font-semibold text-slate-900">Mở lại lịch trống này cho bệnh nhân khác</span>
+                  <span className="mt-1 block text-slate-600">Nếu mở lại, bệnh nhân khác có thể đặt khung giờ này.</span>
+                </span>
+              </label>
+              <label className="flex gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                <input
+                  checked={!shouldReopenSlot}
+                  className="mt-1"
+                  name="slotHandling"
+                  type="radio"
+                  onChange={() => setShouldReopenSlot(false)}
+                />
+                <span>
+                  <span className="block font-semibold text-slate-900">Không mở lại lịch này</span>
+                  <span className="mt-1 block text-slate-600">Nếu không mở lại, khung giờ sẽ không còn hiển thị công khai.</span>
+                </span>
+              </label>
+            </fieldset>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button onClick={closeDialog} type="button" variant="secondary">Đóng</Button>
+            <Button disabled={loading}>{loading ? "Đang xử lý..." : "Xác nhận từ chối"}</Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
 }
 
 export function DoctorCancelAppointmentDialog(props: DialogProps & { onConfirm: (reason: string) => Promise<void> }) {
-  return <TextDialog {...props} title="Hủy lịch hẹn" label="Lý do hủy" action="Xác nhận hủy" required />;
+  return <TextDialog {...props} title="Hủy lịch hẹn" label="Lý do hủy" action="Xác nhận hủy" required validationMessage="Vui lòng nhập lý do hủy." />;
 }
 
 export function DoctorRescheduleDialog(props: DialogProps & { onConfirm: (note: string) => Promise<void> }) {
@@ -600,6 +930,7 @@ function TextDialog({
   action,
   loading,
   required,
+  validationMessage,
   onClose,
   onConfirm
 }: DialogProps & {
@@ -607,13 +938,25 @@ function TextDialog({
   label: string;
   action: string;
   required?: boolean;
+  validationMessage?: string;
   onConfirm: (value: string) => Promise<void>;
 }) {
   const [value, setValue] = useState("");
+  const [fieldError, setFieldError] = useState("");
+
+  function closeDialog() {
+    setValue("");
+    setFieldError("");
+    onClose();
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (required && !value.trim()) return;
+    if (required && !value.trim()) {
+      setFieldError(validationMessage || "Vui lòng nhập nội dung.");
+      return;
+    }
+    setFieldError("");
     await onConfirm(value.trim());
     setValue("");
   }
@@ -623,15 +966,24 @@ function TextDialog({
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4">
       <Card className="w-full max-w-lg">
-        <form onSubmit={submit} className="grid gap-4">
+        <form noValidate onSubmit={submit} className="grid gap-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xl font-bold text-slate-950">{title}</h2>
-            <button aria-label="Đóng" className="rounded-lg p-2 hover:bg-slate-100" onClick={onClose} type="button"><X className="h-5 w-5" /></button>
+            <button aria-label="Đóng" className="rounded-lg p-2 hover:bg-slate-100" onClick={closeDialog} type="button"><X className="h-5 w-5" /></button>
           </div>
-          <DoctorTextarea label={label} value={value} onChange={setValue} required={required} />
+          <DoctorTextarea
+            label={label}
+            value={value}
+            onChange={(nextValue) => {
+              setValue(nextValue);
+              if (fieldError && nextValue.trim()) setFieldError("");
+            }}
+            required={required}
+          />
+          {fieldError ? <p className="text-sm font-semibold text-rose-700">{fieldError}</p> : null}
           <div className="flex justify-end gap-2">
-            <Button onClick={onClose} type="button" variant="secondary">Đóng</Button>
-            <Button disabled={loading || (required && !value.trim())}>{loading ? "Đang xử lý..." : action}</Button>
+            <Button onClick={closeDialog} type="button" variant="secondary">Đóng</Button>
+            <Button disabled={loading}>{loading ? "Đang xử lý..." : action}</Button>
           </div>
         </form>
       </Card>

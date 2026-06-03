@@ -21,7 +21,6 @@ export type Database = {
       }>;
       patients: TableDefinition<{
         id: string;
-        account_id: string;
         full_name: string;
         phone: string | null;
         date_of_birth: string | null;
@@ -31,7 +30,6 @@ export type Database = {
       }>;
       doctors: TableDefinition<{
         id: string;
-        account_id: string | null;
         full_name: string;
         specialty: string;
         avatar_url: string | null;
@@ -40,15 +38,29 @@ export type Database = {
         rating: number;
         consultation_fee: number;
         available_online: boolean;
+        public_profile_status: "draft" | "submitted" | "approved" | "rejected";
+        public_profile_submitted_at: string | null;
+        public_profile_reviewed_at: string | null;
+        public_profile_reviewed_by: string | null;
+        public_profile_rejection_reason: string | null;
+        deleted_at: string | null;
         created_at: string;
+      }>;
+      doctor_public_contacts: TableDefinition<{
+        doctor_id: string;
+        public_phone: string | null;
+        public_email: string | null;
+        created_at: string;
+        updated_at: string;
       }>;
       appointments: TableDefinition<{
         id: string;
         doctor_id: string;
         patient_id: string;
+        doctor_schedule_slot_id: string | null;
         appointment_date: string;
         appointment_time: string;
-        consultation_type: "online";
+        consultation_type: "online" | "home_treatment";
         symptoms_description: string | null;
         status: "pending" | "confirmed" | "completed" | "cancelled" | "rejected";
         payment_status: "unpaid" | "paid" | "refunded";
@@ -97,6 +109,19 @@ export type Database = {
         stock_quantity: number;
         is_recommended: boolean;
         created_at: string;
+        is_active: boolean;
+        deleted_at: string | null;
+        updated_at: string | null;
+      }>;
+      product_categories: TableDefinition<{
+        id: string;
+        name: string;
+        slug: string;
+        is_active: boolean;
+        sort_order: number;
+        created_at: string;
+        updated_at: string;
+        deleted_at: string | null;
       }>;
       cart_items: TableDefinition<{
         id: string;
@@ -109,9 +134,30 @@ export type Database = {
         id: string;
         user_id: string;
         total_amount: number;
-        status: "pending" | "paid" | "cancelled";
+        status: "pending" | "confirmed" | "paid" | "cancelled";
         shipping_address: string | null;
+        cancelled_by: string | null;
+        cancellation_reason: string | null;
+        cancelled_at: string | null;
+        cancellation_note: string | null;
         created_at: string;
+        updated_at: string;
+      }>;
+      appointment_contacts: TableDefinition<{
+        id: string;
+        appointment_id: string;
+        patient_id: string;
+        contact_phone: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+      appointment_home_visits: TableDefinition<{
+        id: string;
+        appointment_id: string;
+        patient_id: string;
+        home_address: string;
+        created_at: string;
+        updated_at: string;
       }>;
       order_items: TableDefinition<{
         id: string;
@@ -120,6 +166,20 @@ export type Database = {
         quantity: number;
         unit_price: number;
         created_at: string;
+      }>;
+      shipments: TableDefinition<{
+        id: string;
+        order_id: string;
+        carrier_name: string | null;
+        tracking_number: string | null;
+        shipping_status: "not_started" | "preparing" | "shipped" | "delivered" | "failed" | "returned" | "cancelled";
+        shipping_fee: number;
+        estimated_delivery_date: string | null;
+        shipped_at: string | null;
+        delivered_at: string | null;
+        created_at: string;
+        updated_at: string;
+        is_deleted: boolean;
       }>;
       subscriptions: TableDefinition<{
         id: string;
@@ -202,7 +262,101 @@ export type Database = {
       }>;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      submit_doctor_public_profile: {
+        Args: { target_doctor_id: string };
+        Returns: Database["public"]["Tables"]["doctors"]["Row"];
+      };
+      review_doctor_public_profile: {
+        Args: { target_doctor_id: string; next_status: "approved" | "rejected"; rejection_reason?: string | null };
+        Returns: Database["public"]["Tables"]["doctors"]["Row"];
+      };
+      checkout_patient_cart: {
+        Args: { p_shipping_address: string };
+        Returns: {
+          order_id: string;
+          total_amount: number;
+          item_count: number;
+        }[];
+      };
+      admin_update_order_status: {
+        Args: { target_order_id: string; next_status: "confirmed" };
+        Returns: Database["public"]["Tables"]["orders"]["Row"];
+      };
+      cancel_patient_order: {
+        Args: { target_order_id: string; reason: string };
+        Returns: Database["public"]["Tables"]["orders"]["Row"];
+      };
+      admin_cancel_order: {
+        Args: { target_order_id: string; reason: string };
+        Returns: Database["public"]["Tables"]["orders"]["Row"];
+      };
+      admin_update_shipment_details: {
+        Args: {
+          target_order_id: string;
+          p_carrier_name?: string | null;
+          p_tracking_number?: string | null;
+          p_shipping_fee?: number | null;
+          p_estimated_delivery_date?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["shipments"]["Row"];
+      };
+      admin_transition_shipment: {
+        Args: { target_order_id: string; next_status: "preparing" | "shipped" };
+        Returns: Database["public"]["Tables"]["shipments"]["Row"];
+      };
+      confirm_patient_order_received: {
+        Args: { target_order_id: string };
+        Returns: Database["public"]["Tables"]["shipments"]["Row"];
+      };
+      book_doctor_slot: {
+        Args: {
+          target_doctor_id: string;
+          target_slot_id: string;
+          symptoms?: string | null;
+          requested_consultation_type?: "online" | "home_treatment";
+          contact_phone?: string | null;
+          home_address?: string | null;
+        };
+        Returns: string;
+      };
+      cancel_patient_appointment: {
+        Args: { target_appointment_id: string; cancellation_reason: string };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      confirm_doctor_appointment: {
+        Args: { target_appointment_id: string };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      reject_doctor_appointment: {
+        Args: { target_appointment_id: string; rejection_reason: string; should_reopen_slot?: boolean | null };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      cancel_doctor_appointment: {
+        Args: { target_appointment_id: string; cancellation_reason: string };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      complete_doctor_appointment: {
+        Args: { target_appointment_id: string; note?: string | null };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      create_doctor_schedule_slot: {
+        Args: { target_slot_date: string; target_start_time: string; duration_minutes?: number };
+        Returns: Database["public"]["Tables"]["doctor_schedule_slots"]["Row"];
+      };
+      request_flexible_appointment: {
+        Args: {
+          target_doctor_id: string;
+          preferred_date: string;
+          preferred_time: string;
+          symptoms?: string | null;
+          requested_consultation_type?: "online" | "home_treatment";
+          contact_phone?: string | null;
+          home_address?: string | null;
+        };
+        Returns: string;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
