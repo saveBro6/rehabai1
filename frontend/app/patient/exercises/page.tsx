@@ -6,7 +6,7 @@ import { ExerciseCard } from "@/components/exercises/ExerciseCard";
 import { ExerciseFilter, type ExerciseFilters } from "@/components/exercises/ExerciseFilter";
 import { useAuth } from "@/hooks/useAuth";
 import { getExerciseFilterOptions, getExercises, type ExerciseFilterOptions } from "@/services/exercises.service";
-import type { Exercise } from "@/types";
+import type { PublicExerciseMetadata } from "@/types";
 
 const emptyFilterOptions: ExerciseFilterOptions = {
   categories: [],
@@ -18,7 +18,7 @@ function ExercisesContent() {
   const { isAuthenticated } = useAuth();
   const [filters, setFilters] = useState<ExerciseFilters>({ category: "", difficulty: "", body_region: "", search: "" });
   const [filterOptions, setFilterOptions] = useState<ExerciseFilterOptions>(emptyFilterOptions);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [exercises, setExercises] = useState<PublicExerciseMetadata[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
