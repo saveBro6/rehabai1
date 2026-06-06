@@ -1,4 +1,4 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 type TableDefinition<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
@@ -50,6 +50,16 @@ export type Database = {
         doctor_id: string;
         public_phone: string | null;
         public_email: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      doctor_reviews: TableDefinition<{
+        id: string;
+        doctor_id: string;
+        patient_id: string;
+        appointment_id: string;
+        rating: number;
+        comment: string | null;
         created_at: string;
         updated_at: string;
       }>;
@@ -195,8 +205,14 @@ export type Database = {
         subscription_id: string;
         start_date: string;
         end_date: string;
-        status: "active" | "expired" | "cancelled";
+        status: "pending_payment" | "active" | "expired" | "cancelled";
+        amount: number;
+        payment_method: string | null;
+        payment_reference: string | null;
+        started_at: string | null;
+        expires_at: string | null;
         created_at: string;
+        updated_at: string;
       }>;
       chatbot_messages: TableDefinition<{
         id: string;
@@ -220,6 +236,11 @@ export type Database = {
         precautions: string[] | null;
         image_url: string | null;
         video_url: string | null;
+        video_path: string | null;
+        preview_video_path: string | null;
+        video_mime_type: string | null;
+        video_size_bytes: number | null;
+        video_uploaded_at: string | null;
         is_active: boolean;
         created_at: string;
       }>;
@@ -261,8 +282,114 @@ export type Database = {
         created_at: string;
       }>;
     };
-    Views: Record<string, never>;
+    Views: {
+      exercise_public_metadata: TableDefinition<{
+        id: string;
+        title: string;
+        slug: string;
+        description: string;
+        category: string;
+        difficulty: "Cơ bản" | "Trung cấp" | "Nâng cao";
+        body_region: string;
+        duration_minutes: number | null;
+        repetitions: number | null;
+        sets: number | null;
+        instructions: string[];
+        precautions: string[] | null;
+        image_url: string | null;
+        is_active: boolean;
+        created_at: string;
+      }>;
+      doctor_review_summaries: TableDefinition<{
+        doctor_id: string;
+        average_rating: number | null;
+        review_count: number;
+      }>;
+      doctor_public_reviews: TableDefinition<{
+        doctor_id: string;
+        rating: number;
+        comment: string | null;
+        created_at: string;
+        reviewer_display_name: string;
+      }>;
+    };
     Functions: {
+      create_subscription_checkout: {
+        Args: { p_plan_type: string };
+        Returns: Database["public"]["Tables"]["user_subscriptions"]["Row"];
+      };
+      confirm_subscription_mock_payment: {
+        Args: { target_subscription_id: string };
+        Returns: Database["public"]["Tables"]["user_subscriptions"]["Row"];
+      };
+      cancel_pending_subscription_checkout: {
+        Args: { target_subscription_id: string };
+        Returns: Database["public"]["Tables"]["user_subscriptions"]["Row"];
+      };
+      cancel_current_patient_subscription: {
+        Args: Record<PropertyKey, never>;
+        Returns: Database["public"]["Tables"]["user_subscriptions"]["Row"];
+      };
+      get_current_patient_subscription: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          id: string;
+          user_id: string;
+          subscription_id: string;
+          start_date: string;
+          end_date: string;
+          status: "pending_payment" | "active" | "expired" | "cancelled";
+          amount: number;
+          payment_method: string | null;
+          payment_reference: string | null;
+          started_at: string | null;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+          plan_name: string;
+          plan_price: number;
+          plan_description: string | null;
+          plan_features: string[];
+        }[];
+      };
+      get_pending_patient_subscription_checkout: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          id: string;
+          user_id: string;
+          subscription_id: string;
+          start_date: string;
+          end_date: string;
+          status: "pending_payment" | "active" | "expired" | "cancelled";
+          amount: number;
+          payment_method: string | null;
+          payment_reference: string | null;
+          started_at: string | null;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+          plan_name: string;
+          plan_price: number;
+          plan_description: string | null;
+          plan_features: string[];
+        }[];
+      };
+      get_admin_exercises: {
+        Args: Record<PropertyKey, never>;
+        Returns: Database["public"]["Tables"]["exercises"]["Row"][];
+      };
+      get_admin_subscription_report_rows: {
+        Args: { p_start_date?: string | null; p_end_date?: string | null };
+        Returns: {
+          id: string;
+          activated_at: string;
+          patient_name: string;
+          plan_name: string;
+          amount: number;
+          status: "active" | "cancelled" | "expired";
+          payment_reference: string | null;
+        }[];
+      };
       submit_doctor_public_profile: {
         Args: { target_doctor_id: string };
         Returns: Database["public"]["Tables"]["doctors"]["Row"];
@@ -309,6 +436,10 @@ export type Database = {
         Args: { target_order_id: string };
         Returns: Database["public"]["Tables"]["shipments"]["Row"];
       };
+      admin_cancel_appointment: {
+        Args: { target_appointment_id: string; cancellation_reason: string };
+        Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
       book_doctor_slot: {
         Args: {
           target_doctor_id: string;
@@ -339,6 +470,37 @@ export type Database = {
       complete_doctor_appointment: {
         Args: { target_appointment_id: string; note?: string | null };
         Returns: Database["public"]["Tables"]["appointments"]["Row"];
+      };
+      create_doctor_review: {
+        Args: { target_appointment_id: string; p_rating: number; p_comment?: string | null };
+        Returns: Database["public"]["Tables"]["doctor_reviews"]["Row"];
+      };
+      get_doctor_review_by_appointment: {
+        Args: { target_appointment_id: string };
+        Returns: Database["public"]["Tables"]["doctor_reviews"]["Row"] | null;
+      };
+      get_doctor_reviews_by_appointments: {
+        Args: { target_appointment_ids: string[] };
+        Returns: Database["public"]["Tables"]["doctor_reviews"]["Row"][];
+      };
+      get_exercise_video_access: {
+        Args: { target_exercise_id: string };
+        Returns: {
+          exercise_id: string;
+          access_level: "full" | "locked" | "metadata_only";
+          video_url: string | null;
+          message: string;
+        }[];
+      };
+      admin_set_exercise_video_metadata: {
+        Args: {
+          target_exercise_id: string;
+          p_video_path?: string | null;
+          p_preview_video_path?: string | null;
+          p_video_mime_type?: string | null;
+          p_video_size_bytes?: number | null;
+        };
+        Returns: void;
       };
       create_doctor_schedule_slot: {
         Args: { target_slot_date: string; target_start_time: string; duration_minutes?: number };

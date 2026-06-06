@@ -5,7 +5,8 @@ export type AccountStatus = "active" | "inactive" | "locked";
 export type DoctorScheduleStatus = "available" | "booked" | "blocked" | "cancelled";
 export type DoctorPublicProfileStatus = "draft" | "submitted" | "approved" | "rejected";
 export type ConsultationType = "online" | "home_treatment";
-export type ExerciseDifficulty = "beginner" | "intermediate" | "advanced" | "Cơ bản" | "Trung cấp" | "Nâng cao";
+export type ExerciseDifficulty = "Cơ bản" | "Trung cấp" | "Nâng cao";
+export type RecoveryPlanDifficulty = "beginner" | "intermediate" | "advanced";
 export type PlanStatus = "active" | "paused" | "completed" | "cancelled";
 
 export interface Account {
@@ -55,6 +56,8 @@ export interface Doctor {
   deleted_at?: string | null;
   created_at?: string;
   public_contact?: DoctorPublicContact | null;
+  average_rating?: number | null;
+  review_count?: number;
 }
 
 export interface DoctorPublicContact {
@@ -113,6 +116,31 @@ export interface AppointmentWithDoctor extends Appointment {
   doctor?: Doctor | null;
   contact?: AppointmentContact | null;
   home_visit?: AppointmentHomeVisit | null;
+}
+
+export interface DoctorReview {
+  id: string;
+  doctor_id: string;
+  patient_id: string;
+  appointment_id: string;
+  rating: number;
+  comment?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface DoctorReviewSummary {
+  doctor_id: string;
+  average_rating: number | null;
+  review_count: number;
+}
+
+export interface DoctorPublicReview {
+  doctor_id: string;
+  rating: number;
+  comment?: string | null;
+  created_at: string;
+  reviewer_display_name: string;
 }
 
 export interface DoctorScheduleSlot {
@@ -203,7 +231,14 @@ export interface UserSubscription {
   subscription_id: string;
   start_date: string;
   end_date: string;
-  status: "active" | "expired" | "cancelled";
+  status: "pending_payment" | "active" | "expired" | "cancelled";
+  amount?: number;
+  payment_method?: string | null;
+  payment_reference?: string | null;
+  started_at?: string | null;
+  expires_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
   subscription?: Subscription;
 }
 
@@ -222,8 +257,25 @@ export interface Exercise {
   precautions?: string[];
   image_url?: string;
   video_url?: string;
+  video_path?: string | null;
+  preview_video_path?: string | null;
+  video_mime_type?: string | null;
+  video_size_bytes?: number | null;
+  video_uploaded_at?: string | null;
   is_active: boolean;
   created_at?: string;
+}
+
+export type PublicExerciseMetadata = Omit<
+  Exercise,
+  "video_url" | "video_path" | "preview_video_path" | "video_mime_type" | "video_size_bytes" | "video_uploaded_at"
+>;
+
+export interface ExerciseVideoAccess {
+  exercise_id: string;
+  access_level: "full" | "locked" | "metadata_only";
+  video_url: string | null;
+  message: string;
 }
 
 export interface RecoveryPlan {
@@ -233,7 +285,7 @@ export interface RecoveryPlan {
   recovery_goal: string;
   affected_body_region: string;
   current_mobility_level: string;
-  preferred_difficulty: ExerciseDifficulty;
+  preferred_difficulty: RecoveryPlanDifficulty;
   sessions_per_week: number;
   notes?: string;
   status: PlanStatus;

@@ -8,12 +8,12 @@ import { getCurrentUserSubscription } from "@/services/subscriptions.service";
 import type { UserSubscription } from "@/types";
 
 export function useSubscriptionAccess() {
-  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { user, profile, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(false);
 
   const loadSubscription = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || profile?.account_type !== "patient") {
       setSubscription(null);
       setIsSubscriptionLoading(false);
       return;
@@ -21,11 +21,11 @@ export function useSubscriptionAccess() {
 
     setIsSubscriptionLoading(true);
     try {
-      setSubscription(user ? await getCurrentUserSubscription(user.id) : null);
+      setSubscription(user ? await getCurrentUserSubscription() : null);
     } finally {
       setIsSubscriptionLoading(false);
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, profile?.account_type, user]);
 
   useEffect(() => {
     if (isAuthLoading) return;
