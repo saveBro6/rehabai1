@@ -1,7 +1,92 @@
 import { assertNoSupabaseError, getSupabase } from "@/services/common";
-import type { Appointment, AppointmentStatus, ConsultationType, AppointmentWithDoctor, AppointmentWithPatient, Role } from "@/types";
+import { getDoctorReviewsByAppointmentIds } from "@/services/doctor-reviews.service";
+import type {
+  Appointment,
+  AppointmentContact,
+  AppointmentHomeVisit,
+  AppointmentStatus,
+  ConsultationType,
+  Doctor,
+  DoctorNote,
+  DoctorPublicContact,
+  DoctorReview,
+  DoctorScheduleSlot,
+  Patient,
+  AppointmentWithDoctor,
+  AppointmentWithPatient,
+  Role
+} from "@/types";
 
 type AppointmentCreate = Omit<Appointment, "id" | "created_at" | "updated_at">;
+
+export type AdminAppointment = Appointment & {
+  doctor?: (Pick<Doctor, "id" | "full_name" | "specialty" | "avatar_url"> & {
+    public_contact?: DoctorPublicContact | DoctorPublicContact[] | null;
+  }) | null;
+  patient?: Pick<Patient, "id" | "full_name"> | null;
+  contact?: AppointmentContact | null;
+  home_visit?: AppointmentHomeVisit | null;
+  schedule_slot?: DoctorScheduleSlot | null;
+  review?: DoctorReview | null;
+  latest_note?: DoctorNote | null;
+};
+
+const ADMIN_APPOINTMENT_SELECT = [
+  "*",
+  "doctor:doctors(id,full_name,specialty,avatar_url,public_contact:doctor_public_contacts(*))",
+  "patient:patients(id,full_name)",
+  "contact:appointment_contacts(*)",
+  "home_visit:appointment_home_visits(*)",
+  "schedule_slot:doctor_schedule_slots(*)"
+].join(",");
+
+function normalizeAdminAppointment(row: unknown): AdminAppointment {
+  const appointment = row as AdminAppointment;
+  const rawContact = appointment.contact as AppointmentContact | AppointmentContact[] | null | undefined;
+  const rawHomeVisit = appointment.home_visit as AppointmentHomeVisit | AppointmentHomeVisit[] | null | undefined;
+  const rawSlot = appointment.schedule_slot as DoctorScheduleSlot | DoctorScheduleSlot[] | null | undefined;
+  const rawPublicContact = appointment.doctor?.public_contact as DoctorPublicContact | DoctorPublicContact[] | null | undefined;
+
+  return {
+    ...appointment,
+    contact: Array.isArray(rawContact) ? rawContact[0] || null : rawContact || null,
+    home_visit: Array.isArray(rawHomeVisit) ? rawHomeVisit[0] || null : rawHomeVisit || null,
+    schedule_slot: Array.isArray(rawSlot) ? rawSlot[0] || null : rawSlot || null,
+    doctor: appointment.doctor
+      ? {
+          ...appointment.doctor,
+          public_contact: Array.isArray(rawPublicContact) ? rawPublicContact[0] || null : rawPublicContact || null
+        }
+      : null
+  };
+}
+
+async function attachAdminAppointmentExtras(appointments: AdminAppointment[]) {
+  if (!appointments.length) return appointments;
+
+  const supabase = getSupabase();
+  const appointmentIds = appointments.map((appointment) => appointment.id);
+  const [reviewsByAppointmentId, notesResult] = await Promise.all([
+    getDoctorReviewsByAppointmentIds(appointmentIds),
+    supabase.from("doctor_notes").select("*").in("appointment_id", appointmentIds).order("created_at", { ascending: false })
+  ]);
+
+  assertNoSupabaseError(notesResult.error);
+
+  const notesByAppointmentId = new Map<string, DoctorNote>();
+
+  ((notesResult.data || []) as DoctorNote[]).forEach((note) => {
+    if (note.appointment_id && !notesByAppointmentId.has(note.appointment_id)) {
+      notesByAppointmentId.set(note.appointment_id, note);
+    }
+  });
+
+  return appointments.map((appointment) => ({
+    ...appointment,
+    review: reviewsByAppointmentId.get(appointment.id) || null,
+    latest_note: notesByAppointmentId.get(appointment.id) || null
+  }));
+}
 
 export async function getAppointments(userId?: string, role: Role = "patient") {
   const supabase = getSupabase();
@@ -59,6 +144,32 @@ export async function getPatientAppointmentById(patientId: string, appointmentId
     .maybeSingle();
   assertNoSupabaseError(error);
   return data as unknown as AppointmentWithDoctor | null;
+}
+
+export async function getAdminAppointments() {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("appointments")
+    .select(ADMIN_APPOINTMENT_SELECT)
+    .order("created_at", { ascending: false });
+  assertNoSupabaseError(error);
+
+  const appointments = (data || []).map(normalizeAdminAppointment);
+  return attachAdminAppointmentExtras(appointments);
+}
+
+export async function getAdminAppointmentById(appointmentId: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("appointments")
+    .select(ADMIN_APPOINTMENT_SELECT)
+    .eq("id", appointmentId)
+    .maybeSingle();
+  assertNoSupabaseError(error);
+
+  if (!data) return null;
+  const [appointment] = await attachAdminAppointmentExtras([normalizeAdminAppointment(data)]);
+  return appointment || null;
 }
 
 export async function createAppointment(payload: AppointmentCreate) {
@@ -126,6 +237,16 @@ export async function requestFlexibleAppointment(
 export async function cancelPatientAppointment(id: string, reason: string) {
   const supabase = getSupabase();
   const { data, error } = await supabase.rpc("cancel_patient_appointment", {
+    target_appointment_id: id,
+    cancellation_reason: reason
+  });
+  assertNoSupabaseError(error);
+  return data as Appointment;
+}
+
+export async function adminCancelAppointment(id: string, reason: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc("admin_cancel_appointment", {
     target_appointment_id: id,
     cancellation_reason: reason
   });

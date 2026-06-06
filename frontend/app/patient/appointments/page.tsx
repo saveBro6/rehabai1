@@ -8,7 +8,8 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { useAuth } from "@/hooks/useAuth";
 import { getAppointments } from "@/services/appointments.service";
-import type { AppointmentStatus, AppointmentWithDoctor } from "@/types";
+import { getDoctorReviewsByAppointmentIds } from "@/services/doctor-reviews.service";
+import type { AppointmentStatus, AppointmentWithDoctor, DoctorReview } from "@/types";
 
 const statusLabels: Record<AppointmentStatus, string> = {
   pending: "Chờ bác sĩ xác nhận",
@@ -48,11 +49,16 @@ function summarizeText(value?: string | null, maxLength = 120) {
 export default function AppointmentsPage() {
   const { user, profile, isLoading } = useAuth();
   const [appointments, setAppointments] = useState<AppointmentWithDoctor[]>([]);
+  const [reviewMap, setReviewMap] = useState<Map<string, DoctorReview>>(new Map());
 
   useEffect(() => {
     if (isLoading || !user) return;
     if (profile?.account_type !== "patient") return;
-    void getAppointments(user.id, "patient").then(setAppointments);
+    void getAppointments(user.id, "patient").then(async (nextAppointments) => {
+      setAppointments(nextAppointments);
+      const completedAppointmentIds = nextAppointments.filter((appointment) => appointment.status === "completed").map((appointment) => appointment.id);
+      setReviewMap(await getDoctorReviewsByAppointmentIds(completedAppointmentIds));
+    });
   }, [isLoading, profile, user]);
 
   return (
@@ -79,6 +85,11 @@ export default function AppointmentsPage() {
                   </span>
                 </div>
                 {appointment.symptoms_description ? <p className="mt-3 text-sm text-slate-600">Ghi chú: {summarizeText(appointment.symptoms_description)}</p> : null}
+                {appointment.status === "completed" ? (
+                  <p className="mt-2 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                    {reviewMap.has(appointment.id) ? "Đã đánh giá" : "Có thể đánh giá"}
+                  </p>
+                ) : null}
                 {appointment.status === "rejected" ? (
                   <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
                     Lý do từ chối: {appointment.reject_reason || "Không có lý do được cung cấp."}
