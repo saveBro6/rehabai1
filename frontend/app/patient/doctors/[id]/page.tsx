@@ -7,14 +7,25 @@ import Link from "next/link";
 import { AppointmentForm } from "@/components/AppointmentForm";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { getDoctorRatingLabel } from "@/lib/doctor-reviews";
 import { getImageUrl, formatCurrency } from "@/lib/utils";
 import { getAvailableDoctorScheduleSlots } from "@/services/doctor-schedules.service";
+import { getDoctorPublicReviews } from "@/services/doctor-reviews.service";
 import { getDoctorById } from "@/services/doctors.service";
-import type { Doctor, DoctorScheduleSlot } from "@/types";
+import type { Doctor, DoctorPublicReview, DoctorScheduleSlot } from "@/types";
+
+function formatReviewDate(value: string) {
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(new Date(value));
+}
 
 export default function DoctorDetailPage({ params }: { params: { id: string } }) {
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [availableSlots, setAvailableSlots] = useState<DoctorScheduleSlot[]>([]);
+  const [publicReviews, setPublicReviews] = useState<DoctorPublicReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -25,12 +36,14 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
 
     void Promise.all([
       getDoctorById(params.id),
-      getAvailableDoctorScheduleSlots(params.id).catch(() => [])
+      getAvailableDoctorScheduleSlots(params.id).catch(() => []),
+      getDoctorPublicReviews(params.id).catch(() => [])
     ])
-      .then(([nextDoctor, nextSlots]) => {
+      .then(([nextDoctor, nextSlots, nextReviews]) => {
         if (!active) return;
         setDoctor(nextDoctor);
         setAvailableSlots(nextSlots);
+        setPublicReviews(nextReviews);
       })
       .catch((loadError) => {
         if (!active) return;
@@ -108,7 +121,7 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
             <p className="text-sm text-slate-600">Năm kinh nghiệm</p>
           </Card>
           <Card>
-            <p className="text-2xl font-bold">{doctor.rating}</p>
+            <p className="text-2xl font-bold">{getDoctorRatingLabel(doctor)}</p>
             <p className="text-sm text-slate-600">Đánh giá</p>
           </Card>
           <Card>
@@ -133,6 +146,32 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
             </div>
           </Card>
         ) : null}
+        <Card className="mt-6">
+          <h2 className="text-xl font-bold text-slate-950">Đánh giá từ bệnh nhân</h2>
+          <p className="mt-2 text-sm text-slate-600">{getDoctorRatingLabel(doctor)}</p>
+          <div className="mt-4 grid gap-3">
+            {publicReviews.length ? (
+              publicReviews.map((review, index) => (
+                <div key={`${review.doctor_id}-${review.created_at}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-950">{review.reviewer_display_name || "Bệnh nhân đã xác thực"}</p>
+                      <span className="mt-1 inline-flex items-center gap-1 font-semibold text-slate-950">
+                        {Array.from({ length: 5 }).map((_, starIndex) => (
+                          <span key={starIndex} className={starIndex < review.rating ? "text-amber-500" : "text-slate-300"}>★</span>
+                        ))}
+                      </span>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-500">{formatReviewDate(review.created_at)}</span>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{review.comment || "Không có nhận xét thêm."}</p>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">Chưa có đánh giá</p>
+            )}
+          </div>
+        </Card>
       </div>
       <Card className="h-fit">
         <h2 className="text-xl font-bold">Đặt lịch tư vấn</h2>

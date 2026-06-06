@@ -3,6 +3,24 @@ import type { ExerciseLog, ProgressSummary } from "@/types";
 
 type ExerciseLogCreate = Omit<ExerciseLog, "id" | "completed_at" | "created_at" | "exercise"> & { completed_at?: string };
 
+const EXERCISE_METADATA_SELECT = [
+  "id",
+  "title",
+  "slug",
+  "description",
+  "category",
+  "difficulty",
+  "body_region",
+  "duration_minutes",
+  "repetitions",
+  "sets",
+  "instructions",
+  "precautions",
+  "image_url",
+  "is_active",
+  "created_at"
+].join(",");
+
 function parseDate(value: string) {
   return new Date(value);
 }
@@ -11,7 +29,7 @@ export async function getExerciseLogs(userId?: string) {
   const supabase = getSupabase();
   let query = supabase
     .from("exercise_logs")
-    .select("*, exercise:exercises(*)")
+    .select(`*, exercise:exercises(${EXERCISE_METADATA_SELECT})`)
     .order("completed_at", { ascending: false });
 
   if (userId) query = query.eq("user_id", userId);
@@ -26,7 +44,7 @@ export async function createExerciseLog(payload: ExerciseLogCreate) {
   const { data, error } = await supabase
     .from("exercise_logs")
     .insert({ ...payload, completed_at: payload.completed_at || new Date().toISOString() })
-    .select("*, exercise:exercises(*)")
+    .select(`*, exercise:exercises(${EXERCISE_METADATA_SELECT})`)
     .single();
   assertNoSupabaseError(error);
   return data as unknown as ExerciseLog;
@@ -38,7 +56,7 @@ export async function updateExerciseLog(logId: string, payload: Partial<Exercise
     .from("exercise_logs")
     .update(payload)
     .eq("id", logId)
-    .select("*, exercise:exercises(*)")
+    .select(`*, exercise:exercises(${EXERCISE_METADATA_SELECT})`)
     .single();
   assertNoSupabaseError(error);
   return data as unknown as ExerciseLog;

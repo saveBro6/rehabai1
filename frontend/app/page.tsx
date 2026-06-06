@@ -22,13 +22,14 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { PublicProductSearch } from "@/components/public/PublicProductSearch";
 import { getProtectedHref } from "@/lib/auth-navigation";
+import { getDoctorRatingLabel } from "@/lib/doctor-reviews";
 import { visiblePricingPlans } from "@/lib/subscription-access";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { getDoctors } from "@/services/doctors.service";
 import { getExercises } from "@/services/exercises.service";
 import { getSubscriptions } from "@/services/subscriptions.service";
-import type { Doctor, Exercise, Subscription } from "@/types";
+import type { Doctor, PublicExerciseMetadata, Subscription } from "@/types";
 
 const benefits = [
   { icon: ShieldCheck, title: "Giảm thời gian đi lại", text: "Theo dõi và tập luyện tại nhà với hướng dẫn rõ ràng hơn." },
@@ -55,7 +56,7 @@ const faq = [
 export default function LandingPage() {
   const { isAuthenticated } = useAuth();
   const [featuredDoctors, setFeaturedDoctors] = useState<Doctor[]>([]);
-  const [featuredExercises, setFeaturedExercises] = useState<Exercise[]>([]);
+  const [featuredExercises, setFeaturedExercises] = useState<PublicExerciseMetadata[]>([]);
   const [subscriptionPlans, setSubscriptionPlans] = useState<Subscription[]>([]);
   const [loadingHighlights, setLoadingHighlights] = useState(true);
   const createPlanHref = getProtectedHref(isAuthenticated, "/patient/recovery-plan/create");
@@ -205,7 +206,7 @@ export default function LandingPage() {
               <h3 className="mt-1 text-xl font-bold text-slate-950">{doctor.full_name}</h3>
               <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
                 <span>{doctor.experience_years} năm kinh nghiệm</span>
-                <span className="inline-flex items-center gap-1"><Star className="h-4 w-4 fill-amber-400 text-amber-400" />{doctor.rating}</span>
+                <span className="inline-flex items-center gap-1"><Star className="h-4 w-4 fill-amber-400 text-amber-400" />{getDoctorRatingLabel(doctor)}</span>
               </div>
               <p className="mt-3 text-sm leading-6 text-slate-600">{doctor.bio}</p>
               <Link href="/patient/doctors" className="mt-5 inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">Xem bác sĩ</Link>

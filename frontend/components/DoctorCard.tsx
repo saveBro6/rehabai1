@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { getDoctorRatingLabel } from "@/lib/doctor-reviews";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
 import type { Doctor } from "@/types";
 
@@ -28,7 +29,7 @@ export function DoctorCard({ doctor }: { doctor: Doctor; isAuthenticated?: boole
           <span>{doctor.experience_years} năm kinh nghiệm</span>
           <span className="inline-flex items-center gap-1">
             <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-            {doctor.rating}
+            {getDoctorRatingLabel(doctor)}
           </span>
         </div>
         
