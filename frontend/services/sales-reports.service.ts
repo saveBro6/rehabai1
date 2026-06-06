@@ -1,4 +1,5 @@
 import { getAdminOrders, type AdminOrder, type ShippingStatus } from "@/services/orders.service";
+import { assertNoSupabaseError, getSupabase } from "@/services/common";
 
 export type SalesReportGroupBy = "month" | "year";
 
@@ -23,12 +24,32 @@ export type SalesReportProductRow = {
   value: number;
 };
 
+export type SalesReportSubscriptionStatus = "active" | "cancelled" | "expired";
+
+export type SalesReportSubscriptionRow = {
+  id: string;
+  activatedAt: string;
+  patientName: string;
+  planName: string;
+  amount: number;
+  status: SalesReportSubscriptionStatus;
+  paymentReference: string | null;
+};
+
 export type SalesReportSummary = {
   totalOrders: number;
   pendingOrders: number;
   confirmedOrders: number;
   cancelledOrders: number;
   deliveredOrders: number;
+  totalMockRevenue: number;
+  productMockRevenue: number;
+  subscriptionMockRevenue: number;
+  activeSubscriptionCount: number;
+  cancelledSubscriptionCount: number;
+  basicActiveSubscriptions: number;
+  standardActiveSubscriptions: number;
+  premiumActiveSubscriptions: number;
   validMockOrderValue: number;
   pendingOrderValue: number;
   cancelledOrderValue: number;
@@ -40,6 +61,7 @@ export type SalesReport = {
   chart: SalesReportChartPoint[];
   topProductsByQuantity: SalesReportProductRow[];
   topProductsByValue: SalesReportProductRow[];
+  subscriptionRows: SalesReportSubscriptionRow[];
   recentOrders: AdminOrder[];
   statusBreakdown: Array<{ status: AdminOrder["status"]; label: string; count: number }>;
   shipmentBreakdown: Array<{ status: ShippingStatus | "none"; label: string; count: number }>;
@@ -124,13 +146,44 @@ function aggregateProducts(orders: AdminOrder[]) {
   return Array.from(rowsById.values());
 }
 
+async function getAdminSubscriptionReportRows(params: SalesReportParams): Promise<SalesReportSubscriptionRow[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc("get_admin_subscription_report_rows", {
+    p_start_date: params.startDate || null,
+    p_end_date: params.endDate || null
+  });
+  assertNoSupabaseError(error);
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    activatedAt: row.activated_at,
+    patientName: row.patient_name,
+    planName: row.plan_name,
+    amount: Number(row.amount || 0),
+    status: row.status,
+    paymentReference: row.payment_reference
+  }));
+}
+
+function countPlan(subscriptionRows: SalesReportSubscriptionRow[], planName: string) {
+  return subscriptionRows.filter((row) => row.planName.toLowerCase() === planName).length;
+}
+
 export async function getAdminSalesReport(params: SalesReportParams): Promise<SalesReport> {
-  const orders = (await getAdminOrders()).filter((order) => isWithinDateRange(order, params));
+  const [rawOrders, subscriptionRows] = await Promise.all([
+    getAdminOrders(),
+    getAdminSubscriptionReportRows(params)
+  ]);
+  const orders = rawOrders.filter((order) => isWithinDateRange(order, params));
   const validOrders = orders.filter(isValidMockOrder);
   const pendingOrders = orders.filter((order) => order.status === "pending");
   const cancelledOrders = orders.filter((order) => order.status === "cancelled");
   const products = aggregateProducts(validOrders);
   const chartByKey = new Map<string, SalesReportChartPoint>();
+  const productMockRevenue = validOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+  const subscriptionMockRevenue = subscriptionRows.reduce((sum, row) => sum + row.amount, 0);
+  const activeSubscriptionRows = subscriptionRows.filter((row) => row.status === "active");
+  const cancelledSubscriptionRows = subscriptionRows.filter((row) => row.status === "cancelled");
 
   validOrders.forEach((order) => {
     const key = getChartKey(order, params.groupBy);
@@ -161,7 +214,15 @@ export async function getAdminSalesReport(params: SalesReportParams): Promise<Sa
       confirmedOrders: orders.filter((order) => order.status === "confirmed").length,
       cancelledOrders: cancelledOrders.length,
       deliveredOrders: orders.filter(isDelivered).length,
-      validMockOrderValue: validOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
+      totalMockRevenue: productMockRevenue + subscriptionMockRevenue,
+      productMockRevenue,
+      subscriptionMockRevenue,
+      activeSubscriptionCount: activeSubscriptionRows.length,
+      cancelledSubscriptionCount: cancelledSubscriptionRows.length,
+      basicActiveSubscriptions: countPlan(activeSubscriptionRows, "basic"),
+      standardActiveSubscriptions: countPlan(activeSubscriptionRows, "standard"),
+      premiumActiveSubscriptions: countPlan(activeSubscriptionRows, "premium"),
+      validMockOrderValue: productMockRevenue,
       pendingOrderValue: pendingOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
       cancelledOrderValue: cancelledOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
       soldProductQuantity: products.reduce((sum, product) => sum + product.quantity, 0)
@@ -169,6 +230,7 @@ export async function getAdminSalesReport(params: SalesReportParams): Promise<Sa
     chart: Array.from(chartByKey.values()).sort((first, second) => first.key.localeCompare(second.key)),
     topProductsByQuantity: [...products].sort((first, second) => second.quantity - first.quantity).slice(0, 8),
     topProductsByValue: [...products].sort((first, second) => second.value - first.value).slice(0, 8),
+    subscriptionRows,
     recentOrders: [...orders]
       .sort((first, second) => new Date(second.created_at || 0).getTime() - new Date(first.created_at || 0).getTime())
       .slice(0, 10),
