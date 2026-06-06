@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "db:reset": "cd ../supabase && npx supabase db reset && cd ../frontend && node seed-storage.js",
+    "db:reset": "cd ../supabase && npx supabase db reset",
+    "storage:seed": "node seed-storage.js",
+    "db:reset:with-storage": "npm run db:reset && npm run storage:seed",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
