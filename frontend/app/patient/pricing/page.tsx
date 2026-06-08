@@ -355,8 +355,8 @@ export default function PricingPage() {
             <tbody className="divide-y divide-slate-100">
               {comparison.map((row) => (
                 <tr key={row[0]}>
-                  {row.map((cell) => (
-                    <td key={cell} className="px-5 py-3 text-slate-700">
+                  {row.map((cell, cellIndex) => (
+                    <td key={`${row[0]}-${cellIndex}`} className="px-5 py-3 text-slate-700">
                       {cell}
                     </td>
                   ))}
