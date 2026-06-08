@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { useToast } from "@/hooks/useToast";
+import { getAuthRedirectUrl } from "@/lib/auth-redirects";
 import { getSupabaseClient, getSupabaseConfigError } from "@/lib/supabase-client";
 
 export default function ForgotPasswordPage() {
@@ -29,7 +30,7 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/patient/reset-password`
+      redirectTo: getAuthRedirectUrl("/patient/reset-password")
     });
     setLoading(false);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 import { Button } from "@/components/Button";
@@ -14,8 +14,26 @@ export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [preparingSession, setPreparingSession] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    const code = new URLSearchParams(window.location.search).get("code");
+
+    if (!supabase || !code) {
+      setPreparingSession(false);
+      return;
+    }
+
+    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      if (error) {
+        pushToast("Liên kết đặt lại mật khẩu không hợp lệ", error.message);
+      }
+      setPreparingSession(false);
+    });
+  }, [pushToast]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -98,7 +116,7 @@ export default function ResetPasswordPage() {
             </div>
           </div>
 
-          <Button disabled={loading} type="submit">
+          <Button disabled={loading || preparingSession} type="submit">
             {loading ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
           </Button>
         </form>

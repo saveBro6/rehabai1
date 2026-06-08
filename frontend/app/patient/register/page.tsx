@@ -7,6 +7,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { useToast } from "@/hooks/useToast";
+import { getAuthRedirectUrl } from "@/lib/auth-redirects";
 import { getSupabaseClient, getSupabaseConfigError } from "@/lib/supabase-client";
 
 export default function RegisterPage() {
@@ -53,6 +54,7 @@ export default function RegisterPage() {
       email: form.email,
       password: form.password,
       options: {
+        emailRedirectTo: getAuthRedirectUrl("/login"),
         data: {
           full_name: form.full_name,
           phone: form.phone
