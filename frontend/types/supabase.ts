@@ -27,6 +27,7 @@ export type Database = {
         address: string | null;
         medical_condition: string | null;
         gender: "male" | "female" | "other" | null;
+        avatar_url: string | null;
       }>;
       doctors: TableDefinition<{
         id: string;
@@ -60,6 +61,8 @@ export type Database = {
         appointment_id: string;
         rating: number;
         comment: string | null;
+        reviewer_display_name: string;
+        reviewer_avatar_url: string | null;
         created_at: string;
         updated_at: string;
       }>;
@@ -214,6 +217,16 @@ export type Database = {
         created_at: string;
         updated_at: string;
       }>;
+      trial_claims: TableDefinition<{
+        id: string;
+        plan_name: string;
+        user_id: string;
+        subscription_id: string | null;
+        normalized_email: string;
+        normalized_phone: string | null;
+        claimed_at: string;
+        created_at: string;
+      }>;
       chatbot_messages: TableDefinition<{
         id: string;
         user_id: string | null;
@@ -311,6 +324,7 @@ export type Database = {
         comment: string | null;
         created_at: string;
         reviewer_display_name: string;
+        reviewer_avatar_url: string | null;
       }>;
     };
     Functions: {
@@ -329,6 +343,23 @@ export type Database = {
       cancel_current_patient_subscription: {
         Args: Record<PropertyKey, never>;
         Returns: Database["public"]["Tables"]["user_subscriptions"]["Row"];
+      };
+      start_standard_trial: {
+        Args: Record<PropertyKey, never>;
+        Returns: Database["public"]["Tables"]["user_subscriptions"]["Row"];
+      };
+      get_standard_trial_offer_eligibility: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          eligible: boolean;
+          has_active_subscription: boolean;
+          has_used_standard_trial: boolean;
+          has_confirmed_email: boolean;
+          has_profile_phone: boolean;
+          has_claimed_email: boolean;
+          has_claimed_phone: boolean;
+          ineligibility_reason: string | null;
+        }[];
       };
       get_current_patient_subscription: {
         Args: Record<PropertyKey, never>;

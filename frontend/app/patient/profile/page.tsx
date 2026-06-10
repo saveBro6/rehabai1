@@ -1,17 +1,19 @@
 "use client";
 
-import { CalendarDays, CreditCard, ShieldCheck, X } from "lucide-react";
+import Image from "next/image";
+import { CalendarDays, CreditCard, ShieldCheck, Upload, X } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getImageUrl } from "@/lib/utils";
+import { normalizeVietnamMobilePhone, VIETNAM_PHONE_ERROR } from "@/lib/vietnam-phone";
 import { cancelCurrentPatientSubscription, getCurrentUserSubscription } from "@/services/subscriptions.service";
-import { updateCurrentUserProfile } from "@/services/users.service";
+import { updateCurrentUserProfile, uploadPatientAvatar } from "@/services/users.service";
 import type { User, UserSubscription } from "@/types";
 
 const statusLabels: Record<UserSubscription["status"], string> = {
@@ -46,6 +48,22 @@ export default function ProfilePage() {
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+
+  const loadSubscription = useCallback(async () => {
+    if (!authUser || profile?.account_type !== "patient") {
+      setSubscription(null);
+      return;
+    }
+
+    try {
+      const currentSubscription = await getCurrentUserSubscription();
+      setSubscription(currentSubscription);
+    } catch {
+      setSubscription(null);
+    }
+  }, [authUser, profile?.account_type]);
 
   useEffect(() => {
     if (!authUser || !profile) return;
@@ -57,27 +75,78 @@ export default function ProfilePage() {
   }, [authUser, profile]);
 
   useEffect(() => {
-    if (!authUser || profile?.account_type !== "patient") return;
-    void getCurrentUserSubscription().then(setSubscription).catch(() => setSubscription(null));
-  }, [authUser, profile]);
+    void loadSubscription();
+  }, [loadSubscription]);
+
+  useEffect(() => {
+    function refreshSubscription() {
+      void loadSubscription();
+    }
+
+    window.addEventListener("rehabai:subscription-updated", refreshSubscription);
+    return () => window.removeEventListener("rehabai:subscription-updated", refreshSubscription);
+  }, [loadSubscription]);
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(objectUrl);
+
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [avatarFile]);
+
+  function selectAvatar(file?: File | null) {
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      pushToast("Ảnh không hợp lệ", "Vui lòng chọn ảnh JPG, PNG hoặc WebP.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      pushToast("Ảnh quá lớn", "Vui lòng chọn ảnh tối đa 5MB.");
+      return;
+    }
+
+    setAvatarFile(file);
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!user) return;
 
+    const hasPhone = Boolean(user.phone?.trim());
+    const normalizedPhone = hasPhone ? normalizeVietnamMobilePhone(user.phone) : null;
+    if (hasPhone && !normalizedPhone) {
+      pushToast("Số điện thoại không hợp lệ", VIETNAM_PHONE_ERROR);
+      return;
+    }
+
     try {
+      let avatarUrl = user.avatar_url;
+      if (avatarFile) {
+        avatarUrl = await uploadPatientAvatar(user.id, avatarFile);
+      }
+
       const updated = await updateCurrentUserProfile({
         full_name: user.full_name,
-        phone: user.phone,
+        phone: normalizedPhone,
         role: user.role,
         date_of_birth: user.date_of_birth,
         address: user.address,
-        medical_condition: user.medical_condition
+        medical_condition: user.medical_condition,
+        avatar_url: avatarUrl
       });
       setUser({ ...user, ...updated });
+      setAvatarFile(null);
       pushToast("Đã cập nhật hồ sơ", "Thông tin cá nhân đã được lưu.");
-    } catch {
-      pushToast("Không thể cập nhật hồ sơ", "Vui lòng thử lại sau.");
+    } catch (error) {
+      pushToast("Không thể cập nhật hồ sơ", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
     }
   }
 
@@ -121,6 +190,37 @@ export default function ProfilePage() {
           <Card>
             <h2 className="text-xl font-bold text-slate-950">Thông tin người dùng</h2>
             <form onSubmit={submit} className="mt-6 grid gap-4">
+              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center">
+                <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border border-emerald-100 bg-white">
+                  {avatarPreviewUrl || user.avatar_url ? (
+                    <Image
+                      src={avatarPreviewUrl || getImageUrl(user.avatar_url)}
+                      alt={user.full_name}
+                      fill
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center bg-emerald-100 text-2xl font-bold text-emerald-700">
+                      {user.full_name.slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-slate-950">Ảnh đại diện</p>
+                  <p className="mt-1 text-sm text-slate-600">Chọn ảnh JPG, PNG hoặc WebP tối đa 5MB. Ảnh sẽ được tải lên khi bạn bấm Lưu hồ sơ.</p>
+                  <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">
+                    <Upload className="h-4 w-4" />
+                    Chọn ảnh
+                    <input
+                      className="sr-only"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(event) => selectAvatar(event.target.files?.[0])}
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-slate-700">Họ và tên</label>
@@ -144,8 +244,10 @@ export default function ProfilePage() {
                     className="rounded-lg border border-slate-300 px-3 py-2"
                     value={user.phone || ""}
                     onChange={(event) => setUser({ ...user, phone: event.target.value })}
-                    placeholder="Nhập số điện thoại"
+                    placeholder="Ví dụ: 0914662777"
+                    inputMode="tel"
                   />
+                  <p className="text-xs text-slate-500">Chỉ nhận số di động Việt Nam; hệ thống lưu theo dạng +84.</p>
                 </div>
 
                 <div className="flex flex-col gap-1.5">

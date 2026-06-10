@@ -1,6 +1,7 @@
 import type { User as AuthUser } from "@supabase/supabase-js";
 
 import { assertNoSupabaseError, getSupabase } from "@/services/common";
+import { normalizeVietnamMobilePhone, VIETNAM_PHONE_ERROR } from "@/lib/vietnam-phone";
 import type { Account, Patient, User } from "@/types";
 
 export type SignUpPayload = {
@@ -51,13 +52,23 @@ export async function updateCurrentUserProfile(payload: Partial<Omit<User, "id" 
     assertNoSupabaseError(error);
   }
 
+  const normalizedPhone =
+    payload.phone === undefined || !payload.phone?.trim()
+      ? payload.phone
+      : normalizeVietnamMobilePhone(payload.phone);
+
+  if (payload.phone?.trim() && !normalizedPhone) {
+    throw new Error(VIETNAM_PHONE_ERROR);
+  }
+
   const patientPayload = {
     full_name: payload.full_name,
-    phone: payload.phone,
+    phone: normalizedPhone,
     date_of_birth: payload.date_of_birth,
     address: payload.address,
     medical_condition: payload.medical_condition,
-    gender: payload.gender
+    gender: payload.gender,
+    avatar_url: payload.avatar_url
   };
   const hasPatientUpdate = Object.values(patientPayload).some((value) => value !== undefined);
   if (hasPatientUpdate) {
@@ -90,7 +101,8 @@ export async function ensureUserProfile(authUser: AuthUser, fallback?: Partial<U
     phone: String(metadata.phone || fallback?.phone || "") || null,
     date_of_birth: null,
     address: null,
-    medical_condition: null
+    medical_condition: null,
+    avatar_url: null
   };
   const { error: patientError } = await supabase.from("patients").insert(patientPayload);
   assertNoSupabaseError(patientError);
@@ -111,9 +123,48 @@ function mergeAccountPatient(account: Account, patient: Patient | null): User {
     address: patient?.address || undefined,
     medical_condition: patient?.medical_condition || undefined,
     gender: patient?.gender || undefined,
+    avatar_url: patient?.avatar_url || undefined,
     must_change_password: account.must_change_password,
     account_type: account.account_type,
     account_status: account.account_status,
     created_at: account.created_at
   };
+}
+
+export async function uploadPatientAvatar(patientId: string, file: File) {
+  const supabase = getSupabase();
+  const {
+    data: { user },
+    error: authError
+  } = await supabase.auth.getUser();
+  assertNoSupabaseError(authError);
+
+  if (!user || user.id !== patientId) {
+    throw new Error("Bạn chỉ có thể cập nhật ảnh đại diện của chính mình.");
+  }
+
+  const extensionByMimeType: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp"
+  };
+  const extension = extensionByMimeType[file.type];
+
+  if (!extension) {
+    throw new Error("Vui lòng chọn ảnh JPG, PNG hoặc WebP.");
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("Vui lòng chọn ảnh tối đa 5MB.");
+  }
+
+  const path = `patients/${patientId}/avatar-${Date.now()}.${extension}`;
+  const { error } = await supabase.storage.from("images").upload(path, file, {
+    cacheControl: "3600",
+    contentType: file.type,
+    upsert: false
+  });
+  assertNoSupabaseError(error);
+
+  return path;
 }

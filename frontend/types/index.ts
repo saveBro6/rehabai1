@@ -22,11 +22,12 @@ export interface Account {
 export interface Patient {
   id: string;
   full_name: string;
-  phone?: string;
+  phone?: string | null;
   date_of_birth?: string;
   address?: string;
   medical_condition?: string;
   gender?: "male" | "female" | "other";
+  avatar_url?: string | null;
 }
 
 export interface User extends Patient {
@@ -125,6 +126,8 @@ export interface DoctorReview {
   appointment_id: string;
   rating: number;
   comment?: string | null;
+  reviewer_display_name?: string;
+  reviewer_avatar_url?: string | null;
   created_at: string;
   updated_at?: string;
 }
@@ -141,6 +144,7 @@ export interface DoctorPublicReview {
   comment?: string | null;
   created_at: string;
   reviewer_display_name: string;
+  reviewer_avatar_url?: string | null;
 }
 
 export interface DoctorScheduleSlot {
