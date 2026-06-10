@@ -32,6 +32,15 @@ export function useSubscriptionAccess() {
     void loadSubscription();
   }, [isAuthLoading, loadSubscription]);
 
+  useEffect(() => {
+    function refreshSubscription() {
+      void loadSubscription();
+    }
+
+    window.addEventListener("rehabai:subscription-updated", refreshSubscription);
+    return () => window.removeEventListener("rehabai:subscription-updated", refreshSubscription);
+  }, [loadSubscription]);
+
   const planName = getEffectivePlanName(subscription);
 
   return {

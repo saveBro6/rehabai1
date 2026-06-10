@@ -28,6 +28,26 @@ type CurrentSubscriptionRow = {
   plan_features: string[];
 };
 
+export type StandardTrialEligibility = {
+  eligible: boolean;
+  has_active_subscription: boolean;
+  has_used_standard_trial: boolean;
+  has_confirmed_email: boolean;
+  has_profile_phone: boolean;
+  has_claimed_email: boolean;
+  has_claimed_phone: boolean;
+  ineligibility_reason:
+    | "active_subscription"
+    | "used_trial"
+    | "email_not_confirmed"
+    | "missing_phone"
+    | "email_claimed"
+    | "phone_claimed"
+    | "not_active_patient"
+    | "not_eligible"
+    | null;
+};
+
 function normalizeCurrentSubscription(row: CurrentSubscriptionRow): UserSubscription {
   return {
     id: row.id,
@@ -99,6 +119,31 @@ export async function cancelPendingSubscriptionCheckout(subscriptionId: string) 
 export async function cancelCurrentPatientSubscription() {
   const supabase = getSupabase();
   const { data, error } = await supabase.rpc("cancel_current_patient_subscription");
+  assertNoSupabaseError(error);
+  return data as unknown as UserSubscription;
+}
+
+export async function getStandardTrialEligibility(): Promise<StandardTrialEligibility> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc("get_standard_trial_offer_eligibility");
+  assertNoSupabaseError(error);
+
+  const row = (data || [])[0] as StandardTrialEligibility | undefined;
+  return row || {
+    eligible: false,
+    has_active_subscription: false,
+    has_used_standard_trial: false,
+    has_confirmed_email: false,
+    has_profile_phone: false,
+    has_claimed_email: false,
+    has_claimed_phone: false,
+    ineligibility_reason: "not_eligible"
+  };
+}
+
+export async function startStandardTrial() {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc("start_standard_trial");
   assertNoSupabaseError(error);
   return data as unknown as UserSubscription;
 }
