@@ -44,10 +44,12 @@ function isValidPhone(value: string) {
 
 export function AppointmentForm({
   doctorId,
+  doctorAvailableOnline,
   availableSlots = [],
   onBooked
 }: {
   doctorId: string;
+  doctorAvailableOnline: boolean;
   availableSlots?: DoctorScheduleSlot[];
   onBooked?: (slotId: string) => void;
 }) {
@@ -237,7 +239,7 @@ export function AppointmentForm({
       ) : null}
 
       <label className="grid gap-1 text-sm font-medium text-slate-700">
-        Hình thức tư vấn
+        Hình thức bạn yêu cầu
         <select
           className="rounded-lg border border-slate-300 bg-white px-3 py-2"
           value={consultationType}
@@ -248,6 +250,20 @@ export function AppointmentForm({
           <option value="home_treatment">{consultationTypeLabels.home_treatment}</option>
         </select>
       </label>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+        <p>
+          <span className="font-semibold">Hình thức bác sĩ công khai hỗ trợ:</span>{" "}
+          {doctorAvailableOnline ? "Tư vấn online" : "Chưa công bố hỗ trợ tư vấn online"}
+        </p>
+        <p className="mt-1 text-slate-600">
+          {consultationType === "home_treatment"
+            ? "Điều trị tại nhà là yêu cầu của bạn và chỉ được thực hiện sau khi bác sĩ xác nhận khả năng hỗ trợ."
+            : doctorAvailableOnline
+              ? "Yêu cầu tư vấn online phù hợp với hình thức bác sĩ đang công khai hỗ trợ."
+              : "Hồ sơ bác sĩ chưa công bố hỗ trợ online; yêu cầu vẫn cần bác sĩ xác nhận trước khi được chấp nhận."}
+        </p>
+      </div>
 
       <label className="grid gap-1 text-sm font-medium text-slate-700">
         Số điện thoại liên hệ
@@ -289,7 +305,7 @@ export function AppointmentForm({
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
         <p className="font-semibold text-slate-900">Tóm tắt yêu cầu</p>
-        <p>Hình thức: {consultationTypeLabels[consultationType]}</p>
+        <p>Hình thức bạn yêu cầu: {consultationTypeLabels[consultationType]}</p>
         <p>Số điện thoại: {normalizedPhone || "Chưa nhập"}</p>
         {consultationType === "home_treatment" ? <p>Địa chỉ: {trimmedHomeAddress || "Chưa nhập"}</p> : null}
         <p className="mt-2 text-slate-600">

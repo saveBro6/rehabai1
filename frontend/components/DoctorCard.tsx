@@ -18,7 +18,7 @@ export function DoctorCard({ doctor }: { doctor: Doctor; isAuthenticated?: boole
         alt={doctor.full_name}
         width={800}
         height={520}
-        className="h-48 w-full object-cover"
+        className="h-48 w-full object-cover object-top"
       />
       <div className="flex flex-1 flex-col p-5">
         <p className="text-sm font-semibold text-emerald-700">{doctor.specialty}</p>

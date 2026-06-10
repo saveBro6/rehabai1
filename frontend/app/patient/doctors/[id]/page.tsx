@@ -22,6 +22,16 @@ function formatReviewDate(value: string) {
   }).format(new Date(value));
 }
 
+function getInitials(value?: string | null) {
+  const text = value?.trim();
+  if (!text) return "BN";
+  return text
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
+
 export default function DoctorDetailPage({ params }: { params: { id: string } }) {
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [availableSlots, setAvailableSlots] = useState<DoctorScheduleSlot[]>([]);
@@ -102,7 +112,8 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
           alt={doctor.full_name}
           width={1000}
           height={560}
-          className="h-80 w-full rounded-lg object-cover"
+          priority
+          className="h-80 w-full rounded-lg bg-slate-100 object-contain object-top"
         />
         <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -111,7 +122,7 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
             <p className="mt-2 font-semibold text-emerald-700">{doctor.specialty}</p>
           </div>
           {doctor.available_online ? (
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">Tư vấn online</span>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">Hình thức hỗ trợ: Tư vấn online</span>
           ) : null}
         </div>
         <p className="mt-4 text-slate-700">{doctor.bio || "Bác sĩ chưa cập nhật mô tả công khai."}</p>
@@ -133,7 +144,8 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
           <h2 className="text-xl font-bold text-slate-950">Thông tin tư vấn</h2>
           <div className="mt-4 grid gap-3 text-sm text-slate-700">
             <p><span className="font-semibold">Chuyên khoa:</span> {doctor.specialty}</p>
-            <p><span className="font-semibold">Hình thức:</span> Tư vấn online</p>
+            <p><span className="font-semibold">Hình thức bác sĩ hỗ trợ:</span> {doctor.available_online ? "Tư vấn online" : "Cần xác nhận với phòng khám"}</p>
+            <p><span className="font-semibold">Hình thức bạn yêu cầu:</span> Chọn trong biểu mẫu đặt lịch bên phải.</p>
             <p><span className="font-semibold">Trạng thái hồ sơ:</span> Chỉ hiển thị bác sĩ đã được duyệt, tài khoản active và chưa bị xóa.</p>
           </div>
         </Card>
@@ -154,13 +166,27 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
               publicReviews.map((review, index) => (
                 <div key={`${review.doctor_id}-${review.created_at}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="font-semibold text-slate-950">{review.reviewer_display_name || "Bệnh nhân đã xác thực"}</p>
-                      <span className="mt-1 inline-flex items-center gap-1 font-semibold text-slate-950">
-                        {Array.from({ length: 5 }).map((_, starIndex) => (
-                          <span key={starIndex} className={starIndex < review.rating ? "text-amber-500" : "text-slate-300"}>★</span>
-                        ))}
-                      </span>
+                    <div className="flex items-center gap-3">
+                      <div className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-emerald-100 text-sm font-bold text-emerald-700">
+                        {review.reviewer_avatar_url ? (
+                          <Image
+                            src={getImageUrl(review.reviewer_avatar_url)}
+                            alt={review.reviewer_display_name || "Bệnh nhân đã xác thực"}
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          getInitials(review.reviewer_display_name)
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-950">{review.reviewer_display_name || "Bệnh nhân đã xác thực"}</p>
+                        <span className="mt-1 inline-flex items-center gap-1 font-semibold text-slate-950">
+                          {Array.from({ length: 5 }).map((_, starIndex) => (
+                            <span key={starIndex} className={starIndex < review.rating ? "text-amber-500" : "text-slate-300"}>★</span>
+                          ))}
+                        </span>
+                      </div>
                     </div>
                     <span className="text-xs font-semibold text-slate-500">{formatReviewDate(review.created_at)}</span>
                   </div>
@@ -181,6 +207,7 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
         <div className="mt-5">
           <AppointmentForm
             doctorId={doctor.id}
+            doctorAvailableOnline={doctor.available_online}
             availableSlots={availableSlots}
             onBooked={(slotId) => setAvailableSlots((current) => current.filter((slot) => slot.id !== slotId))}
           />
