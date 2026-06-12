@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -22,6 +22,7 @@ import {
 import { composeShippingAddress, type DeliveryAddressForm } from "@/lib/shipping-address";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { createOrderFromCart } from "@/services/orders.service";
+import { getMyWallet, type Wallet } from "@/services/wallet.service";
 
 const emptyDeliveryAddress: DeliveryAddressForm = {
   recipientName: "",
@@ -65,6 +66,7 @@ export default function PatientCheckoutPage() {
   const { items, total, loading: isCartLoading, refresh } = useCart();
   const { pushToast } = useToast();
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddressForm>(emptyDeliveryAddress);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const isActivePatient = profile?.account_type === "patient" && profile?.account_status === "active";
   const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
@@ -76,7 +78,29 @@ export default function PatientCheckoutPage() {
     [items]
   );
   const hasStockIssue = stockWarnings.length > 0;
+  const walletBalance = Number(wallet?.balance || 0);
+  const hasInsufficientWalletBalance = isActivePatient && total > 0 && walletBalance < total;
   const isLoading = isAuthLoading || isCartLoading;
+
+  useEffect(() => {
+    if (!isActivePatient) {
+      setWallet(null);
+      return;
+    }
+
+    let active = true;
+    void getMyWallet()
+      .then((walletRow) => {
+        if (active) setWallet(walletRow);
+      })
+      .catch(() => {
+        if (active) setWallet(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isActivePatient]);
 
   function updateDeliveryField(field: keyof DeliveryAddressForm, value: string) {
     setDeliveryAddress((current) => ({ ...current, [field]: value }));
@@ -121,6 +145,14 @@ export default function PatientCheckoutPage() {
       return;
     }
 
+    if (hasInsufficientWalletBalance) {
+      pushToast(
+        "Số dư ví không đủ",
+        `Vui lòng nạp thêm ${formatCurrency(total - walletBalance)} vào ví RehabAI trước khi thanh toán.`
+      );
+      return;
+    }
+
     if (!validateDeliveryAddress()) {
       return;
     }
@@ -130,9 +162,10 @@ export default function PatientCheckoutPage() {
       const shippingAddress = composeShippingAddress(deliveryAddress);
       const result = await createOrderFromCart(user.id, shippingAddress);
       await refresh();
+      setWallet(await getMyWallet());
       pushToast(
-        "Tạo đơn hàng mô phỏng thành công.",
-        "Đơn hàng đang chờ xử lý. Chưa có thanh toán thật hoặc xác nhận từ cổng thanh toán."
+        "Thanh toán bằng ví thành công.",
+        "Đơn hàng đang chờ Admin xác nhận xử lý. Số dư ví đã được khấu trừ."
       );
 
       if (result.order_id) {
@@ -141,7 +174,7 @@ export default function PatientCheckoutPage() {
         router.push("/patient/orders");
       }
     } catch (error) {
-      pushToast("Thanh toán mô phỏng thất bại", normalizeCheckoutError(error));
+      pushToast("Thanh toán bằng ví thất bại", normalizeCheckoutError(error));
     } finally {
       setSubmitting(false);
     }
@@ -156,10 +189,10 @@ export default function PatientCheckoutPage() {
           </Link>
 
           <div className="mt-6">
-            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">Thanh toán mô phỏng</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">Thanh toán bằng ví</p>
             <h1 className="mt-1 text-3xl font-bold text-slate-950">Xem lại đơn hàng</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              Thanh toán mô phỏng - chưa phải thanh toán qua cổng thật. Đơn hàng tạo ra sẽ ở trạng thái pending/mock.
+              Thanh toán sản phẩm bằng số dư ví RehabAI. Đơn hàng tạo ra sẽ chờ Admin xác nhận xử lý.
             </p>
           </div>
 
@@ -231,11 +264,16 @@ export default function PatientCheckoutPage() {
           <Card className="h-fit">
             <h2 className="text-xl font-bold text-slate-950">Thông tin thanh toán</h2>
 
-            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="font-semibold text-amber-900">Thanh toán mô phỏng</p>
-              <p className="mt-2 text-sm text-amber-800">
-                Chưa có thanh toán thật hoặc xác nhận từ cổng thanh toán. Đây chỉ là bước xác nhận mock để tạo đơn hàng pending.
+            <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <p className="font-semibold text-emerald-900">Ví RehabAI</p>
+              <p className="mt-2 text-sm text-emerald-800">
+                Số dư hiện tại: <span className="font-bold">{formatCurrency(walletBalance)}</span>
               </p>
+              {hasInsufficientWalletBalance ? (
+                <Link href="/patient/wallet" className="mt-3 inline-flex text-sm font-bold text-emerald-700 underline">
+                  Nạp thêm {formatCurrency(total - walletBalance)} vào ví
+                </Link>
+              ) : null}
             </div>
 
             <div className="mt-6">
@@ -346,15 +384,21 @@ export default function PatientCheckoutPage() {
               </div>
             ) : null}
 
+            {hasInsufficientWalletBalance ? (
+              <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                Số dư ví không đủ để thanh toán. Vui lòng nạp thêm trước khi tiếp tục.
+              </div>
+            ) : null}
+
             <Button
               type="submit"
               className="mt-5 w-full"
-              disabled={submitting || isLoading || !items.length || !isActivePatient || hasStockIssue}
+              disabled={submitting || isLoading || !items.length || !isActivePatient || hasStockIssue || hasInsufficientWalletBalance}
             >
-              {submitting ? "Đang tạo đơn..." : "Xác nhận thanh toán mô phỏng"}
+              {submitting ? "Đang thanh toán..." : "Thanh toán bằng ví RehabAI"}
             </Button>
             <p className="mt-3 text-xs text-slate-500">
-              Đơn hàng đang chờ xử lý sau khi xác nhận. Hệ thống không ghi nhận đây là thanh toán gateway thật.
+              Đơn hàng chờ xử lý sau khi ví được khấu trừ. Top-up ví không được tính là doanh thu.
             </p>
           </Card>
         </form>

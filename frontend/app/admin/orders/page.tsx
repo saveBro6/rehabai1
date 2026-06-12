@@ -83,6 +83,18 @@ function getStatusLabel(status: AdminOrder["status"]) {
   return status;
 }
 
+function getPaymentLabel(order: AdminOrder) {
+  if (order.payment_method === "internal_wallet" && order.payment_status === "paid") {
+    return "Ví RehabAI";
+  }
+
+  if (order.payment_status === "paid") {
+    return "Đã thanh toán";
+  }
+
+  return "Chưa thanh toán";
+}
+
 function getStatusBadgeClass(status: AdminOrder["status"]) {
   if (status === "pending") return "bg-amber-100 text-amber-800";
   if (status === "confirmed") return "bg-emerald-100 text-emerald-700";
@@ -449,6 +461,7 @@ export default function AdminOrdersPage() {
                               Lý do: {order.cancellation_reason || "Chưa có lý do"}
                             </span>
                           ) : null}
+                          <span className="text-xs font-semibold text-emerald-700">{getPaymentLabel(order)}</span>
                         </div>
                       </td>
                       <td className="px-5 py-4">

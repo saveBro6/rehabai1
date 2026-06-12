@@ -55,6 +55,18 @@ function getStatusLabel(status: AdminOrder["status"]) {
   return status;
 }
 
+function getPaymentLabel(order: AdminOrder) {
+  if (order.payment_method === "internal_wallet" && order.payment_status === "paid") {
+    return "Đã thanh toán bằng Ví RehabAI";
+  }
+
+  if (order.payment_status === "paid") {
+    return "Đã thanh toán";
+  }
+
+  return "Chưa thanh toán";
+}
+
 function getShippingStatusLabel(status?: ShippingStatus) {
   if (status === "not_started") return "Chưa bắt đầu giao";
   if (status === "preparing") return "Đang chuẩn bị";
@@ -280,7 +292,11 @@ export default function AdminOrderDetailPage({ params }: { params: { id: string 
                   </span>
                 </div>
                 <p className="mt-5 text-sm text-slate-600">
-                  Đây là đơn hàng mock/simulated. Không dùng trạng thái này như xác nhận thanh toán thật từ gateway.
+                  Thanh toán ví là số dư nội bộ RehabAI. Không dùng trạng thái đơn hàng như xác nhận thanh toán thật từ gateway.
+                </p>
+                <p className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+                  {getPaymentLabel(order)}
+                  {order.paid_at ? ` · ${formatDate(order.paid_at)}` : ""}
                 </p>
                 {order.status === "pending" ? (
                   <div className="mt-5 rounded-lg border border-emerald-100 bg-emerald-50 p-4">

@@ -47,6 +47,18 @@ function getStatusLabel(status: OrderWithItems["status"]) {
   return status;
 }
 
+function getPaymentLabel(order: OrderWithItems) {
+  if (order.payment_method === "internal_wallet" && order.payment_status === "paid") {
+    return "Đã thanh toán bằng Ví RehabAI";
+  }
+
+  if (order.payment_status === "paid") {
+    return "Đã thanh toán";
+  }
+
+  return "Chưa thanh toán";
+}
+
 function getShippingStatusLabel(status?: ShippingStatus) {
   if (status === "not_started") return "Chưa bắt đầu giao";
   if (status === "preparing") return "Đang chuẩn bị";
@@ -209,11 +221,15 @@ export default function PatientOrderDetailPage({ params }: { params: { id: strin
                   </span>
                 </div>
                 <p className="mt-5 text-sm text-slate-600">
-                  Chưa có thanh toán thật hoặc xác nhận từ cổng thanh toán. Trạng thái đơn phản ánh xử lý nội bộ/mock.
+                  Trạng thái đơn phản ánh xử lý nội bộ. Thanh toán ví là số dư nội bộ RehabAI, không phải xác nhận từ cổng ngân hàng thật.
+                </p>
+                <p className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+                  {getPaymentLabel(order)}
+                  {order.paid_at ? ` · ${formatDate(order.paid_at)}` : ""}
                 </p>
                 {order.status === "confirmed" ? (
                   <p className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
-                    Đơn hàng đã được xác nhận để xử lý. Thanh toán vẫn là mô phỏng/chưa qua cổng thật.
+                    Đơn hàng đã được xác nhận để xử lý. Thanh toán đã đi qua ví nội bộ nếu trạng thái thanh toán hiển thị là đã thanh toán.
                   </p>
                 ) : null}
                 {order.status === "cancelled" ? (
