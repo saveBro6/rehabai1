@@ -1,8 +1,8 @@
 "use client";
 
-import { CreditCard, QrCode, ShieldCheck, XCircle } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -13,13 +13,11 @@ import { redirectToLogin } from "@/lib/auth-navigation";
 import { visiblePricingPlans } from "@/lib/subscription-access";
 import { formatCurrency } from "@/lib/utils";
 import {
-  cancelPendingSubscriptionCheckout,
-  confirmSubscriptionMockPayment,
-  createSubscriptionCheckout,
   getCurrentUserSubscription,
-  getPendingSubscriptionCheckout,
-  getSubscriptions
+  getSubscriptions,
+  paySubscriptionWithWallet
 } from "@/services/subscriptions.service";
+import { getMyWallet, type Wallet } from "@/services/wallet.service";
 import type { Subscription, UserSubscription } from "@/types";
 
 const planTiers: Record<string, number> = {
@@ -27,8 +25,6 @@ const planTiers: Record<string, number> = {
   Standard: 2,
   Premium: 3
 };
-
-const AUTO_VERIFY_SECONDS = 20;
 
 const comparison = [
   ["Thư viện bài tập", "Cơ bản", "Đầy đủ", "Đầy đủ"],
@@ -48,40 +44,14 @@ export default function PricingPage() {
   const { user, profile, isAuthenticated } = useAuth();
   const [plans, setPlans] = useState<Subscription[]>([]);
   const [activeSubscription, setActiveSubscription] = useState<UserSubscription | null>(null);
-  const [pendingCheckout, setPendingCheckout] = useState<UserSubscription | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<Subscription | null>(null);
-  const [isCreatingCheckout, setIsCreatingCheckout] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [isCancellingPending, setIsCancellingPending] = useState(false);
-  const [autoVerifyCountdown, setAutoVerifyCountdown] = useState<number | null>(null);
-  const confirmationInFlightRef = useRef(false);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
 
-  const refreshSubscriptionState = useCallback(async () => {
-    const [current, pending] = await Promise.all([getCurrentUserSubscription(), getPendingSubscriptionCheckout()]);
+  const refreshState = useCallback(async () => {
+    const [current, walletRow] = await Promise.all([getCurrentUserSubscription(), getMyWallet().catch(() => null)]);
     setActiveSubscription(current?.status === "active" ? current : null);
-    setPendingCheckout(pending);
-    setSelectedPlan(pending?.subscription || null);
+    setWallet(walletRow);
   }, []);
-
-  const confirmMockPayment = useCallback(async () => {
-    if (!pendingCheckout) return;
-    if (confirmationInFlightRef.current) return;
-
-    confirmationInFlightRef.current = true;
-    setIsConfirming(true);
-    try {
-      await confirmSubscriptionMockPayment(pendingCheckout.id);
-      await refreshSubscriptionState();
-      pushToast("Đăng ký gói thành công", "Thanh toán giả lập cho MVP đã được xác nhận.");
-      router.push("/patient/profile");
-    } catch (error) {
-      await refreshSubscriptionState().catch(() => undefined);
-      pushToast("Không thể tự xác nhận thanh toán", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
-    } finally {
-      setIsConfirming(false);
-      confirmationInFlightRef.current = false;
-    }
-  }, [pendingCheckout, pushToast, refreshSubscriptionState, router]);
 
   useEffect(() => {
     void getSubscriptions().then((data) => setPlans(visiblePricingPlans(data)));
@@ -90,55 +60,19 @@ export default function PricingPage() {
   useEffect(() => {
     if (!isAuthenticated || !user || profile?.account_type !== "patient") {
       setActiveSubscription(null);
-      setPendingCheckout(null);
-      setSelectedPlan(null);
-      setAutoVerifyCountdown(null);
+      setWallet(null);
       return;
     }
 
-    void refreshSubscriptionState();
-  }, [isAuthenticated, profile?.account_type, refreshSubscriptionState, user]);
-
-  useEffect(() => {
-    if (!pendingCheckout || profile?.account_type !== "patient") {
-      setAutoVerifyCountdown(null);
-      return;
-    }
-
-    const activeTier = getPlanTier(activeSubscription?.subscription?.name);
-    const pendingTier = getPlanTier(pendingCheckout.subscription?.name || selectedPlan?.name);
-    if (activeTier > 0 && pendingTier > 0 && pendingTier <= activeTier) {
-      setAutoVerifyCountdown(null);
-      return;
-    }
-
-    setAutoVerifyCountdown(AUTO_VERIFY_SECONDS);
-    const intervalId = window.setInterval(() => {
-      setAutoVerifyCountdown((value) => (value && value > 0 ? value - 1 : 0));
-    }, 1000);
-    const timeoutId = window.setTimeout(() => {
-      void confirmMockPayment();
-    }, AUTO_VERIFY_SECONDS * 1000);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.clearTimeout(timeoutId);
-    };
-  }, [
-    activeSubscription?.id,
-    activeSubscription?.subscription?.name,
-    confirmMockPayment,
-    pendingCheckout,
-    pendingCheckout?.id,
-    pendingCheckout?.subscription?.name,
-    profile?.account_type,
-    selectedPlan?.name
-  ]);
+    void refreshState();
+  }, [isAuthenticated, profile?.account_type, refreshState, user]);
 
   function getCardState(plan: Subscription) {
     const activePlanName = activeSubscription?.subscription?.name || null;
     const activeTier = getPlanTier(activePlanName);
     const planTier = getPlanTier(plan.name);
+    const walletBalance = Number(wallet?.balance || 0);
+    const price = Number(plan.price || 0);
 
     if (activeTier > 0) {
       if (planTier < activeTier) {
@@ -156,29 +90,31 @@ export default function PricingPage() {
           isDisabled: true
         };
       }
+    }
 
+    if (walletBalance < price) {
       return {
-        actionLabel: "Nâng cấp",
-        disabledReason: undefined,
+        actionLabel: "Nạp ví để mua gói",
+        disabledReason: `Cần nạp thêm ${formatCurrency(price - walletBalance)} vào ví RehabAI.`,
         isDisabled: false
       };
     }
 
     return {
-      actionLabel: "Chọn gói",
+      actionLabel: activeTier > 0 ? "Nâng cấp bằng ví" : "Thanh toán bằng ví",
       disabledReason: undefined,
       isDisabled: false
     };
   }
 
-  async function startCheckout(plan: Subscription) {
+  async function startWalletPayment(plan: Subscription) {
     if (!isAuthenticated) {
       redirectToLogin(router, "/patient/pricing");
       return;
     }
 
-    if (profile?.account_type !== "patient") {
-      pushToast("Không thể chọn gói", "Chỉ tài khoản Patient mới có thể đăng ký gói.");
+    if (profile?.account_type !== "patient" || profile.account_status !== "active") {
+      pushToast("Không thể chọn gói", "Chỉ tài khoản Patient đang hoạt động mới có thể đăng ký gói.");
       return;
     }
 
@@ -189,44 +125,31 @@ export default function PricingPage() {
       return;
     }
 
-    setIsCreatingCheckout(true);
-    try {
-      const pending = await createSubscriptionCheckout(plan.name);
-      const pendingWithPlan = { ...pending, subscription: plan };
-      setSelectedPlan(plan);
-      setPendingCheckout(pendingWithPlan);
-      pushToast("Đã tạo giao dịch mô phỏng", "Hệ thống sẽ tự xác nhận thanh toán giả lập sau ít giây.");
-    } catch (error) {
-      pushToast("Không thể tạo thanh toán", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
-    } finally {
-      setIsCreatingCheckout(false);
+    const walletBalance = Number(wallet?.balance || 0);
+    const price = Number(plan.price || 0);
+    if (walletBalance < price) {
+      pushToast("Số dư ví không đủ", `Vui lòng nạp thêm ${formatCurrency(price - walletBalance)} trước khi mua gói.`);
+      router.push("/patient/wallet");
+      return;
     }
-  }
 
-  async function cancelPendingCheckout() {
-    if (!pendingCheckout) return;
-
-    setIsCancellingPending(true);
+    setIsPaying(true);
     try {
-      await cancelPendingSubscriptionCheckout(pendingCheckout.id);
-      setPendingCheckout(null);
-      setSelectedPlan(null);
-      setAutoVerifyCountdown(null);
-      pushToast("Đã hủy giao dịch", "Giao dịch đang chờ đã được hủy. Gói đang hoạt động, nếu có, không bị ảnh hưởng.");
+      await paySubscriptionWithWallet(plan.name);
+      await refreshState();
+      pushToast("Đăng ký gói thành công", "Số dư ví đã được khấu trừ và gói đã được kích hoạt.");
+      window.dispatchEvent(new Event("rehabai:subscription-updated"));
+      router.push("/patient/profile");
     } catch (error) {
-      pushToast("Không thể hủy giao dịch", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
+      pushToast("Không thể thanh toán bằng ví", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
+      await refreshState().catch(() => undefined);
     } finally {
-      setIsCancellingPending(false);
+      setIsPaying(false);
     }
   }
 
   const activePlanName = activeSubscription?.subscription?.name || null;
-  const checkoutAmount = Number(pendingCheckout?.amount ?? selectedPlan?.price ?? 0);
-  const pendingPlanName = pendingCheckout?.subscription?.name || selectedPlan?.name || "gói đã chọn";
-  const visibleSelectedPlan = useMemo(
-    () => selectedPlan || plans.find((plan) => plan.id === pendingCheckout?.subscription_id) || null,
-    [pendingCheckout?.subscription_id, plans, selectedPlan]
-  );
+  const walletBalance = Number(wallet?.balance || 0);
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-10">
@@ -235,24 +158,31 @@ export default function PricingPage() {
           <p className="text-sm font-bold uppercase text-emerald-700">Bảng giá</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-950">Chọn gói đồng hành phù hợp</h1>
           <p className="mt-3 max-w-2xl text-sm text-slate-600">
-            Thanh toán trong MVP là mô phỏng. Gói chỉ được kích hoạt sau khi bạn xác nhận thanh toán giả lập.
+            Gói trả phí được thanh toán bằng số dư ví RehabAI. Standard trial 7 ngày vẫn miễn phí và không cần số dư ví.
           </p>
         </div>
-        {activeSubscription ? (
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            Gói hiện tại: <span className="font-semibold">{activePlanName}</span>
-            {" · "}
-            Đang hoạt động
-          </div>
-        ) : (
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-            Chưa có gói đang hoạt động
-          </div>
-        )}
+        <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <p>
+            Số dư ví: <span className="font-bold">{formatCurrency(walletBalance)}</span>
+          </p>
+          <Link href="/patient/wallet" className="mt-1 inline-flex text-xs font-bold text-emerald-700 underline">
+            Nạp ví
+          </Link>
+        </div>
       </div>
 
+      {activeSubscription ? (
+        <p className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          Gói hiện tại: <span className="font-semibold">{activePlanName}</span> · Đang hoạt động
+        </p>
+      ) : (
+        <p className="mt-5 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+          Chưa có gói đang hoạt động.
+        </p>
+      )}
+
       <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        MVP hiện chưa hỗ trợ hạ gói trực tiếp. Vui lòng hủy gói hiện tại trước nếu muốn chọn gói thấp hơn.
+        MVP chưa hỗ trợ hạ gói trực tiếp. Vui lòng hủy gói hiện tại trước nếu muốn chọn gói thấp hơn.
       </p>
 
       <div className="mt-8 grid gap-5 md:grid-cols-3">
@@ -267,76 +197,12 @@ export default function PricingPage() {
               actionLabel={cardState.actionLabel}
               disabledReason={cardState.disabledReason}
               isDisabled={cardState.isDisabled}
-              isLoading={isCreatingCheckout || isConfirming || isCancellingPending}
-              onSelect={startCheckout}
+              isLoading={isPaying}
+              onSelect={startWalletPayment}
             />
           );
         })}
       </div>
-
-      {pendingCheckout && visibleSelectedPlan ? (
-        <Card className="mt-8 border-emerald-200 bg-emerald-50">
-          <div className="mb-5 flex items-start gap-3 rounded-lg border border-amber-200 bg-white px-4 py-3 text-sm text-amber-800">
-            <XCircle className="mt-0.5 h-4 w-4 flex-none" />
-            <p>
-              Giao dịch đang chờ cho gói <span className="font-semibold">{pendingPlanName}</span>. Giao dịch này không phải gói hiện tại
-              và không mở khóa video đầy đủ cho đến khi bạn xác nhận thanh toán mô phỏng.
-            </p>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-            <div className="rounded-lg border border-emerald-200 bg-white p-5 text-center shadow-sm">
-              <div className="mx-auto grid h-36 w-36 place-items-center rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50">
-                <QrCode className="h-20 w-20 text-emerald-700" />
-              </div>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-emerald-700">QR mô phỏng</p>
-              <p className="mt-1 text-xs text-slate-500">Không có giao dịch thật được xử lý.</p>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 text-emerald-800">
-                <CreditCard className="h-5 w-5" />
-                <p className="text-sm font-bold uppercase">Thanh toán giả lập cho MVP</p>
-              </div>
-              <h2 className="mt-3 text-2xl font-bold text-slate-950">Xác nhận gói {pendingPlanName}</h2>
-              <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
-                <div className="rounded-lg bg-white p-4">
-                  <dt className="text-slate-500">Số tiền</dt>
-                  <dd className="mt-1 text-lg font-bold text-slate-950">{formatCurrency(checkoutAmount)}</dd>
-                </div>
-                <div className="rounded-lg bg-white p-4">
-                  <dt className="text-slate-500">Mã tham chiếu</dt>
-                  <dd className="mt-1 break-all font-semibold text-slate-950">{pendingCheckout.payment_reference || "Đang tạo"}</dd>
-                </div>
-                <div className="rounded-lg bg-white p-4">
-                  <dt className="text-slate-500">Phương thức</dt>
-                  <dd className="mt-1 font-semibold text-slate-950">Mock QR</dd>
-                </div>
-                <div className="rounded-lg bg-white p-4">
-                  <dt className="text-slate-500">Trạng thái</dt>
-                  <dd className="mt-1 font-semibold text-amber-700">Đang chờ xác nhận thanh toán</dd>
-                </div>
-              </dl>
-              <p className="mt-4 flex gap-2 rounded-lg bg-white p-4 text-sm text-slate-600">
-                <ShieldCheck className="mt-0.5 h-4 w-4 flex-none text-emerald-600" />
-                Hệ thống sẽ tự xác nhận thanh toán giả lập sau khoảng 1-5 phút. Trong local demo, thời gian chờ là khoảng {AUTO_VERIFY_SECONDS} giây.
-              </p>
-              <p className="mt-3 rounded-lg bg-white px-4 py-3 text-sm text-slate-600">
-                {isConfirming
-                  ? "Đang kiểm tra thanh toán..."
-                  : autoVerifyCountdown !== null
-                    ? `Đang kiểm tra thanh toán... còn khoảng ${autoVerifyCountdown} giây. Vui lòng không đóng trang trong quá trình mô phỏng.`
-                    : "Giao dịch đang chờ được giữ riêng với gói hiện tại. Bạn có thể hủy giao dịch này nếu không muốn tiếp tục."}
-              </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <Button variant="secondary" onClick={cancelPendingCheckout} disabled={isConfirming || isCancellingPending}>
-                  {isCancellingPending ? "Đang hủy..." : "Hủy giao dịch"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Card>
-      ) : null}
 
       <Card className="mt-10 overflow-hidden p-0">
         <div className="border-b border-slate-200 px-5 py-4">

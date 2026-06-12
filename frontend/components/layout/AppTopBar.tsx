@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Gift, LogIn, LogOut, Menu, ShoppingCart, UserRound } from "lucide-react";
+import { Gift, LogIn, LogOut, Menu, ShoppingCart, UserRound, WalletCards } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { TrialOfferModal } from "@/components/subscriptions/TrialOfferModal";
@@ -159,6 +159,16 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           {cartHref ? (
             <Link href={cartHref} aria-label="Giỏ hàng" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">
               <ShoppingCart className="h-5 w-5" />
+            </Link>
+          ) : null}
+          {!isLoading && isAuthenticated && isActivePatient ? (
+            <Link
+              href="/patient/wallet"
+              aria-label="Ví của tôi"
+              title="Ví của tôi"
+              className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500"
+            >
+              <WalletCards className="h-5 w-5" />
             </Link>
           ) : null}
           <Link href={profileHref} aria-label="Hồ sơ" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">

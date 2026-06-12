@@ -80,6 +80,13 @@ export async function createSubscriptionCheckout(planName: string) {
   return data as unknown as UserSubscription;
 }
 
+export async function paySubscriptionWithWallet(planName: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc("pay_subscription_with_wallet", { p_plan_type: planName });
+  assertNoSupabaseError(error);
+  return data as unknown as UserSubscription;
+}
+
 export async function confirmSubscriptionMockPayment(subscriptionId: string) {
   const supabase = getSupabase();
   const { data, error } = await supabase.rpc("confirm_subscription_mock_payment", {

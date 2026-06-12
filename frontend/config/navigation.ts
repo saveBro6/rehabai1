@@ -14,6 +14,7 @@ import {
   TrendingUp,
   UserRound,
   Users,
+  WalletCards,
   type LucideIcon
 } from "lucide-react";
 
@@ -75,6 +76,12 @@ export const patientSidebarItems: SidebarItem[] = [
     label: "Đơn hàng",
     href: "/patient/orders",
     icon: FileText,
+    requiresAuth: true
+  },
+  {
+    label: "Ví của tôi",
+    href: "/patient/wallet",
+    icon: WalletCards,
     requiresAuth: true
   },
   {
@@ -150,6 +157,7 @@ export const pageTitles: Record<string, string> = {
   "/patient/progress": "Tiến trình",
   "/patient/products": "Sản phẩm",
   "/patient/orders": "Đơn hàng",
+  "/patient/wallet": "Ví RehabAI",
   "/patient/pricing": "Bảng giá",
   "/patient/profile": "Hồ sơ",
   "/patient/cart": "Giỏ hàng",

@@ -148,6 +148,9 @@ export type Database = {
         user_id: string;
         total_amount: number;
         status: "pending" | "confirmed" | "paid" | "cancelled";
+        payment_status: "unpaid" | "paid" | "refunded";
+        payment_method: string | null;
+        paid_at: string | null;
         shipping_address: string | null;
         cancelled_by: string | null;
         cancellation_reason: string | null;
@@ -225,6 +228,60 @@ export type Database = {
         normalized_email: string;
         normalized_phone: string | null;
         claimed_at: string;
+        created_at: string;
+      }>;
+      wallets: TableDefinition<{
+        id: string;
+        patient_id: string;
+        balance: number;
+        currency: string;
+        status: "active" | "locked" | "closed";
+        created_at: string;
+        updated_at: string;
+      }>;
+      wallet_topups: TableDefinition<{
+        id: string;
+        wallet_id: string;
+        patient_id: string;
+        amount: number;
+        status: "pending" | "completed" | "failed" | "cancelled" | "expired";
+        topup_code: string;
+        provider: "simulated" | "payos";
+        provider_order_code: number | null;
+        provider_payment_link_id: string | null;
+        provider_checkout_url: string | null;
+        provider_qr_code: string | null;
+        provider_status: string | null;
+        provider_raw: Json | null;
+        payment_instruction: string | null;
+        completed_at: string | null;
+        paid_at: string | null;
+        failed_at: string | null;
+        cancelled_at: string | null;
+        expires_at: string | null;
+        expired_at: string | null;
+        cancellation_reason: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      wallet_transactions: TableDefinition<{
+        id: string;
+        wallet_id: string;
+        patient_id: string;
+        type:
+          | "top_up"
+          | "product_payment"
+          | "appointment_payment"
+          | "subscription_payment"
+          | "refund"
+          | "admin_adjustment";
+        amount: number;
+        balance_before: number;
+        balance_after: number;
+        status: "pending" | "completed" | "failed" | "cancelled";
+        reference_type: string | null;
+        reference_id: string | null;
+        description: string | null;
         created_at: string;
       }>;
       chatbot_messages: TableDefinition<{
@@ -436,6 +493,44 @@ export type Database = {
           total_amount: number;
           item_count: number;
         }[];
+      };
+      get_my_wallet: {
+        Args: Record<PropertyKey, never>;
+        Returns: Database["public"]["Tables"]["wallets"]["Row"][];
+      };
+      create_wallet_topup: {
+        Args: { p_amount: number };
+        Returns: Database["public"]["Tables"]["wallet_topups"]["Row"];
+      };
+      confirm_simulated_wallet_topup: {
+        Args: { target_topup_id: string };
+        Returns: Database["public"]["Tables"]["wallet_topups"]["Row"];
+      };
+      complete_provider_wallet_topup: {
+        Args: {
+          p_provider: string;
+          p_provider_order_code: number;
+          p_amount: number;
+          p_provider_payment_link_id?: string | null;
+          p_provider_raw?: Json | null;
+        };
+        Returns: Database["public"]["Tables"]["wallet_topups"]["Row"];
+      };
+      expire_stale_wallet_topups: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
+      pay_order_with_wallet: {
+        Args: { p_shipping_address: string };
+        Returns: {
+          order_id: string;
+          total_amount: number;
+          item_count: number;
+        }[];
+      };
+      pay_subscription_with_wallet: {
+        Args: { p_plan_type: string };
+        Returns: Database["public"]["Tables"]["user_subscriptions"]["Row"];
       };
       admin_update_order_status: {
         Args: { target_order_id: string; next_status: "confirmed" };

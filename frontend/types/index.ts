@@ -246,6 +246,44 @@ export interface UserSubscription {
   subscription?: Subscription;
 }
 
+export interface Wallet {
+  id: string;
+  patient_id: string;
+  balance: number;
+  currency: string;
+  status: "active" | "locked" | "closed";
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WalletTopup {
+  id: string;
+  wallet_id: string;
+  patient_id: string;
+  amount: number;
+  status: "pending" | "completed" | "failed" | "cancelled" | "expired";
+  topup_code: string;
+  payment_instruction?: string | null;
+  completed_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WalletTransaction {
+  id: string;
+  wallet_id: string;
+  patient_id: string;
+  type: "top_up" | "product_payment" | "appointment_payment" | "subscription_payment" | "refund" | "admin_adjustment";
+  amount: number;
+  balance_before: number;
+  balance_after: number;
+  status: "pending" | "completed" | "failed" | "cancelled";
+  reference_type?: string | null;
+  reference_id?: string | null;
+  description?: string | null;
+  created_at?: string;
+}
+
 export interface Exercise {
   id: string;
   title: string;
