@@ -17,14 +17,14 @@ import { getAppointments } from "@/services/appointments.service";
 import { getExercises } from "@/services/exercises.service";
 import { getProgressSummary } from "@/services/progress.service";
 import { getRecoveryPlans } from "@/services/recovery-plans.service";
-import type { Appointment, Exercise, ProgressSummary, RecoveryPlan, UserSubscription } from "@/types";
+import type { Appointment, ProgressSummary, PublicExerciseMetadata, RecoveryPlan, UserSubscription } from "@/types";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user, profile } = useAuth();
   const { planName, subscription: currentSubscription, isLoading: isSubscriptionLoading } = useSubscriptionAccess();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [exercises, setExercises] = useState<PublicExerciseMetadata[]>([]);
   const [plans, setPlans] = useState<RecoveryPlan[]>([]);
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);

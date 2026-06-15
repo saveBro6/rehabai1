@@ -11,7 +11,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { getImageUrl } from "@/lib/utils";
 import { cancelPatientAppointment, getPatientAppointmentById } from "@/services/appointments.service";
-import type { AppointmentStatus, AppointmentWithDoctor, PaymentStatus } from "@/types";
+import { createDoctorReview, getDoctorReviewByAppointmentId } from "@/services/doctor-reviews.service";
+import type { AppointmentStatus, AppointmentWithDoctor, DoctorReview, PaymentStatus } from "@/types";
 
 const statusLabels: Record<AppointmentStatus, string> = {
   pending: "Chờ bác sĩ xác nhận",
@@ -73,8 +74,12 @@ export default function PatientAppointmentDetailPage({ params }: { params: { id:
   const [appointment, setAppointment] = useState<AppointmentWithDoctor | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [reviewSaving, setReviewSaving] = useState(false);
   const [error, setError] = useState("");
   const [cancelReason, setCancelReason] = useState("");
+  const [review, setReview] = useState<DoctorReview | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -82,7 +87,9 @@ export default function PatientAppointmentDetailPage({ params }: { params: { id:
     setLoading(true);
     setError("");
     try {
-      setAppointment(await getPatientAppointmentById(user.id, params.id));
+      const nextAppointment = await getPatientAppointmentById(user.id, params.id);
+      setAppointment(nextAppointment);
+      setReview(nextAppointment ? await getDoctorReviewByAppointmentId(nextAppointment.id) : null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Không thể tải chi tiết lịch hẹn.");
     } finally {
@@ -117,9 +124,31 @@ export default function PatientAppointmentDetailPage({ params }: { params: { id:
     }
   }
 
+  async function submitReview() {
+    if (!appointment) return;
+
+    if (reviewRating < 1 || reviewRating > 5) {
+      pushToast("Thiếu điểm đánh giá", "Vui lòng chọn điểm từ 1 đến 5 sao.");
+      return;
+    }
+
+    setReviewSaving(true);
+    try {
+      const created = await createDoctorReview(appointment.id, reviewRating, reviewComment);
+      setReview(created);
+      setReviewComment("");
+      pushToast("Đã gửi đánh giá", "Cảm ơn bạn đã chia sẻ trải nghiệm sau buổi tư vấn.");
+    } catch (reviewError) {
+      pushToast("Không thể gửi đánh giá", reviewError instanceof Error ? reviewError.message : "Vui lòng thử lại.");
+    } finally {
+      setReviewSaving(false);
+    }
+  }
+
   const rawDoctorPublicContact = appointment?.doctor?.public_contact as unknown;
   const doctorPublicContact = Array.isArray(rawDoctorPublicContact) ? rawDoctorPublicContact[0] : appointment?.doctor?.public_contact;
   const hasDoctorPublicContact = Boolean(doctorPublicContact?.public_phone || doctorPublicContact?.public_email);
+  const canReview = appointment?.status === "completed" && !review;
 
   return (
     <RequireAuth>
@@ -209,6 +238,53 @@ export default function PatientAppointmentDetailPage({ params }: { params: { id:
                   )}
                 </div>
               </Card>
+
+              {appointment.status === "completed" ? (
+                <Card>
+                  <p className="font-bold text-slate-950">Đánh giá bác sĩ</p>
+                  {review ? (
+                    <div className="mt-3 rounded-lg bg-emerald-50 p-4 text-sm text-slate-700">
+                      <p className="font-semibold text-emerald-800">Bạn đã đánh giá lịch hẹn này.</p>
+                      <div className="mt-2 flex gap-1 text-lg">
+                        {Array.from({ length: 5 }).map((_, index) => (
+                          <span key={index} className={index < review.rating ? "text-amber-500" : "text-slate-300"}>★</span>
+                        ))}
+                      </div>
+                      <p className="mt-2">{review.comment || "Không có nhận xét thêm."}</p>
+                    </div>
+                  ) : null}
+                  {canReview ? (
+                    <div className="mt-3 grid gap-3">
+                      <p className="text-sm text-slate-600">Bạn chỉ có thể đánh giá sau khi buổi tư vấn đã hoàn tất.</p>
+                      <div className="flex gap-2">
+                        {Array.from({ length: 5 }).map((_, index) => {
+                          const value = index + 1;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              className={`text-2xl transition ${value <= reviewRating ? "text-amber-500" : "text-slate-300 hover:text-amber-400"}`}
+                              aria-label={`${value} sao`}
+                              onClick={() => setReviewRating(value)}
+                            >
+                              ★
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <textarea
+                        className="min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        value={reviewComment}
+                        onChange={(event) => setReviewComment(event.target.value)}
+                        placeholder="Chia sẻ ngắn gọn trải nghiệm của bạn, nếu có."
+                      />
+                      <Button className="w-full" disabled={reviewSaving} onClick={submitReview}>
+                        {reviewSaving ? "Đang gửi..." : "Gửi đánh giá"}
+                      </Button>
+                    </div>
+                  ) : null}
+                </Card>
+              ) : null}
 
               {appointment.status === "pending" ? (
                 <Card>

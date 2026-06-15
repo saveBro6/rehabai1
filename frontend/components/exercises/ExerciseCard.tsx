@@ -4,12 +4,12 @@ import { Clock, Dumbbell } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { getProtectedHref } from "@/lib/auth-navigation";
 import { getImageUrl } from "@/lib/utils";
-import type { Exercise } from "@/types";
+import { getExerciseDifficultyLabel } from "@/services/exercises.service";
+import type { PublicExerciseMetadata } from "@/types";
 
-export function ExerciseCard({ exercise, isAuthenticated = false }: { exercise: Exercise; isAuthenticated?: boolean }) {
-  const guideHref = getProtectedHref(isAuthenticated, `/patient/exercises/${exercise.id}`);
+export function ExerciseCard({ exercise }: { exercise: PublicExerciseMetadata; isAuthenticated?: boolean }) {
+  const guideHref = `/patient/exercises/${exercise.slug || exercise.id}`;
 
   return (
     <Card className="flex h-full flex-col overflow-hidden p-0">
@@ -23,13 +23,13 @@ export function ExerciseCard({ exercise, isAuthenticated = false }: { exercise: 
       <div className="flex flex-1 flex-col p-5">
         <div className="flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">{exercise.category}</span>
-          <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{exercise.difficulty}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{getExerciseDifficultyLabel(exercise.difficulty)}</span>
         </div>
         <h3 className="mt-3 text-lg font-bold text-slate-950">{exercise.title}</h3>
         <p className="mt-2 line-clamp-2 text-sm text-slate-600">{exercise.description}</p>
         <div className="mt-4 flex items-center gap-4 text-sm text-slate-600">
-          <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" />{exercise.duration_minutes || 0} phut</span>
-          <span className="inline-flex items-center gap-1"><Dumbbell className="h-4 w-4" />{exercise.sets || 1} hiep</span>
+          <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" />{exercise.duration_minutes || 0} phút</span>
+          <span className="inline-flex items-center gap-1"><Dumbbell className="h-4 w-4" />{exercise.sets || 1} hiệp</span>
         </div>
         <Link href={guideHref} className="mt-auto pt-5">
           <Button variant="secondary" className="w-full">Xem hướng dẫn</Button>

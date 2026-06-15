@@ -24,6 +24,18 @@ function getStatusLabel(status: OrderWithItems["status"]) {
   return status;
 }
 
+function getPaymentLabel(order: OrderWithItems) {
+  if (order.payment_method === "internal_wallet" && order.payment_status === "paid") {
+    return "Đã thanh toán bằng Ví RehabAI";
+  }
+
+  if (order.payment_status === "paid") {
+    return "Đã thanh toán";
+  }
+
+  return "Chưa thanh toán";
+}
+
 function getCompactShippingAddress(address?: string | null) {
   const line = getShippingAddressLines(address).find((item) => item.label === "Địa chỉ cụ thể" || item.label === "Địa chỉ");
   return line?.value || address || "Chưa có địa chỉ";
@@ -119,6 +131,7 @@ export default function PatientOrdersPage() {
                       <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">
                         {getStatusLabel(order.status)}
                       </span>
+                      <p className="mt-2 text-sm font-semibold text-emerald-700">{getPaymentLabel(order)}</p>
                       <p className="mt-3 text-sm text-slate-500">Tổng tiền</p>
                       <p className="text-2xl font-bold text-emerald-700">{formatCurrency(Number(order.total_amount || 0))}</p>
                       <p className="mt-1 text-sm text-slate-500">{itemCount} sản phẩm</p>

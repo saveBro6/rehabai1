@@ -14,6 +14,7 @@ import {
   TrendingUp,
   UserRound,
   Users,
+  WalletCards,
   type LucideIcon
 } from "lucide-react";
 
@@ -78,6 +79,12 @@ export const patientSidebarItems: SidebarItem[] = [
     requiresAuth: true
   },
   {
+    label: "Ví của tôi",
+    href: "/patient/wallet",
+    icon: WalletCards,
+    requiresAuth: true
+  },
+  {
     label: "Bảng giá",
     href: "/patient/pricing",
     icon: CreditCard,
@@ -97,6 +104,8 @@ export const doctorSidebarItems: SidebarItem[] = [
 
 export const adminSidebarItems: SidebarItem[] = [
   { label: "Tổng quan", href: "/admin", icon: ShieldCheck, requiresAuth: true },
+  { label: "Lịch hẹn", href: "/admin/appointments", icon: CalendarCheck, requiresAuth: true },
+  { label: "Bài tập", href: "/admin/exercises", icon: Dumbbell, requiresAuth: true },
   { label: "Sản phẩm", href: "/admin/products", icon: ShoppingBag, requiresAuth: true },
   { label: "Đơn hàng", href: "/admin/orders", icon: FileText, requiresAuth: true },
   { label: "Báo cáo bán hàng", href: "/admin/reports", icon: BarChart3, requiresAuth: true }
@@ -127,6 +136,8 @@ export function getCartHref(accountType?: AccountType | null) {
 export const pageTitles: Record<string, string> = {
   "/": "Trang chủ",
   "/admin": "Quản trị",
+  "/admin/appointments": "Quản lý lịch hẹn",
+  "/admin/exercises": "Quản lý video bài tập",
   "/admin/products": "Quản lý sản phẩm",
   "/admin/orders": "Quản lý đơn hàng",
   "/admin/reports": "Báo cáo bán hàng",
@@ -146,6 +157,7 @@ export const pageTitles: Record<string, string> = {
   "/patient/progress": "Tiến trình",
   "/patient/products": "Sản phẩm",
   "/patient/orders": "Đơn hàng",
+  "/patient/wallet": "Ví RehabAI",
   "/patient/pricing": "Bảng giá",
   "/patient/profile": "Hồ sơ",
   "/patient/cart": "Giỏ hàng",

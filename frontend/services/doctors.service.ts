@@ -1,11 +1,12 @@
 import { assertNoSupabaseError, getSupabase } from "@/services/common";
+import { getDoctorReviewSummaryMap } from "@/services/doctor-reviews.service";
 import type { Doctor, DoctorPublicContact } from "@/types";
 
 type DoctorFilters = {
   specialty?: string;
   includePrivate?: boolean;
 };
-type DoctorWritePayload = Omit<Doctor, "id" | "created_at" | "public_contact">;
+type DoctorWritePayload = Omit<Doctor, "id" | "created_at" | "public_contact" | "average_rating" | "review_count">;
 
 const PUBLIC_DOCTOR_COLUMNS = [
   "id",
@@ -31,6 +32,19 @@ function normalizeDoctor(row: unknown) {
   return { ...doctor, public_contact: publicContact } as Doctor;
 }
 
+async function attachReviewSummaries(doctors: Doctor[]) {
+  const summaryMap = await getDoctorReviewSummaryMap(doctors.map((doctor) => doctor.id));
+
+  return doctors.map((doctor) => {
+    const summary = summaryMap.get(doctor.id);
+    return {
+      ...doctor,
+      average_rating: summary?.average_rating ?? null,
+      review_count: summary?.review_count ?? 0
+    };
+  });
+}
+
 function applyPublicDoctorFilters<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(query: T) {
   return query.eq("public_profile_status", "approved").is("deleted_at", null);
 }
@@ -52,7 +66,8 @@ export async function getDoctors(filters?: DoctorFilters) {
 
   const { data, error } = await query;
   assertNoSupabaseError(error);
-  return (data || []).map(normalizeDoctor).filter(Boolean) as Doctor[];
+  const doctors = (data || []).map(normalizeDoctor).filter(Boolean) as Doctor[];
+  return filters?.includePrivate ? doctors : attachReviewSummaries(doctors);
 }
 
 export async function getDoctorSpecialties() {
@@ -73,7 +88,17 @@ export async function getDoctorById(id: string, options?: { includePrivate?: boo
 
   const { data, error } = await query.maybeSingle();
   assertNoSupabaseError(error);
-  return normalizeDoctor(data);
+  const doctor = normalizeDoctor(data);
+  if (!doctor || options?.includePrivate) return doctor;
+
+  const summaryMap = await getDoctorReviewSummaryMap([doctor.id]);
+  const summary = summaryMap.get(doctor.id);
+
+  return {
+    ...doctor,
+    average_rating: summary?.average_rating ?? null,
+    review_count: summary?.review_count ?? 0
+  };
 }
 
 export async function getDoctorByUserId(userId: string) {

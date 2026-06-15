@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/useToast";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { getAppointments } from "@/services/appointments.service";
 import { getDoctors, getSubmittedDoctorPublicProfiles, reviewDoctorPublicProfile } from "@/services/doctors.service";
-import { getExercises } from "@/services/exercises.service";
+import { getAdminExercises } from "@/services/exercises.service";
 import { getExerciseLogs } from "@/services/progress.service";
 import { getProducts } from "@/services/products.service";
 import { getRecoveryPlans } from "@/services/recovery-plans.service";
@@ -49,7 +49,7 @@ export default function AdminPage() {
         getAppointments(undefined, "admin"),
         getProducts(),
         getSubscriptions(),
-        getExercises(),
+        getAdminExercises(),
         getRecoveryPlans(),
         getExerciseLogs()
       ]);

@@ -6,6 +6,24 @@ import type { Insert, Update } from "@/types/supabase";
 
 type RecoveryPlanCreate = Insert<"recovery_plans">;
 
+const EXERCISE_METADATA_SELECT = [
+  "id",
+  "title",
+  "slug",
+  "description",
+  "category",
+  "difficulty",
+  "body_region",
+  "duration_minutes",
+  "repetitions",
+  "sets",
+  "instructions",
+  "precautions",
+  "image_url",
+  "is_active",
+  "created_at"
+].join(",");
+
 function sortPlanExercises(rows: RecoveryPlanExercise[]) {
   return [...rows].sort((a, b) => a.week_number - b.week_number || a.day_number - b.day_number || a.order_index - b.order_index);
 }
@@ -14,7 +32,7 @@ export async function getRecoveryPlans(userId?: string) {
   const supabase = getSupabase();
   let query = supabase
     .from("recovery_plans")
-    .select("*, exercises:recovery_plan_exercises(*, exercise:exercises(*))")
+    .select(`*, exercises:recovery_plan_exercises(*, exercise:exercises(${EXERCISE_METADATA_SELECT}))`)
     .order("created_at", { ascending: false });
 
   if (userId) query = query.eq("user_id", userId);
@@ -32,7 +50,7 @@ export async function getRecoveryPlanById(planId: string) {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from("recovery_plans")
-    .select("*, exercises:recovery_plan_exercises(*, exercise:exercises(*))")
+    .select(`*, exercises:recovery_plan_exercises(*, exercise:exercises(${EXERCISE_METADATA_SELECT}))`)
     .eq("id", planId)
     .maybeSingle();
   assertNoSupabaseError(error);
@@ -90,7 +108,7 @@ export async function generateRecoveryPlanExercises(planId: string) {
   const { data, error } = await supabase
     .from("recovery_plan_exercises")
     .insert(rows)
-    .select("*, exercise:exercises(*)");
+    .select(`*, exercise:exercises(${EXERCISE_METADATA_SELECT})`);
   assertNoSupabaseError(error);
   return sortPlanExercises((data || []) as unknown as RecoveryPlanExercise[]);
 }

@@ -1,37 +1,50 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { redirectToLogin } from "@/lib/auth-navigation";
 import { formatCurrency } from "@/lib/utils";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/useToast";
-import { subscribeUser } from "@/services/subscriptions.service";
 import type { Subscription } from "@/types";
 
-export function PricingCard({ plan, highlighted = false }: { plan: Subscription; highlighted?: boolean }) {
-  const { pushToast } = useToast();
-  const { user, isAuthenticated } = useAuth();
-  const router = useRouter();
+type PricingCardProps = {
+  plan: Subscription;
+  highlighted?: boolean;
+  actionLabel?: string;
+  activePlanName?: string | null;
+  disabledReason?: string;
+  isDisabled?: boolean;
+  isLoading?: boolean;
+  onSelect: (plan: Subscription) => void;
+};
 
-  async function subscribe() {
-    if (!isAuthenticated) {
-      redirectToLogin(router, "/patient/pricing");
-      return;
-    }
-    if (!user) return;
-    await subscribeUser(user.id, plan.id);
-    pushToast("Đã chọn gói.", `Checkout gia lap cho goi ${plan.name} da hoan tat.`);
-  }
+export function PricingCard({
+  plan,
+  highlighted = false,
+  actionLabel = "Chọn gói",
+  activePlanName,
+  disabledReason,
+  isDisabled = false,
+  isLoading = false,
+  onSelect
+}: PricingCardProps) {
+  const isCurrentPlan = activePlanName === plan.name;
 
   return (
-    <Card className={`flex flex-col h-full ${highlighted ? "border-emerald-500 shadow-soft" : ""}`}>
-      <p className="text-sm font-semibold text-emerald-700">{plan.name}</p>
-      <p className="mt-3 text-3xl font-bold text-slate-950">{formatCurrency(plan.price)}</p>
-      <p className="mt-1 text-sm text-slate-500">/tháng</p>
+    <Card className={`flex h-full flex-col ${highlighted ? "border-emerald-500 shadow-soft" : ""}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-emerald-700">{plan.name}</p>
+          <p className="mt-3 text-3xl font-bold text-slate-950">{formatCurrency(plan.price)}</p>
+          <p className="mt-1 text-sm text-slate-500">/tháng</p>
+        </div>
+        {isCurrentPlan ? (
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+            Đang sử dụng
+          </span>
+        ) : null}
+      </div>
+
       <p className="mt-4 min-h-12 text-sm text-slate-600">{plan.description}</p>
       <ul className="mt-5 grid gap-3 text-sm text-slate-700">
         {plan.features.map((feature) => (
@@ -41,12 +54,14 @@ export function PricingCard({ plan, highlighted = false }: { plan: Subscription;
           </li>
         ))}
       </ul>
-      
-    <div className="mt-auto pt-4">
-      <Button className="w-full" onClick={subscribe}>
-        {highlighted ? "Chọn gói" : "Chọn gói"}
-      </Button>
-    </div>
+
+      {disabledReason ? <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{disabledReason}</p> : null}
+
+      <div className="mt-auto pt-4">
+        <Button className="w-full" onClick={() => onSelect(plan)} disabled={isDisabled || isLoading}>
+          {actionLabel}
+        </Button>
+      </div>
     </Card>
   );
 }

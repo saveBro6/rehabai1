@@ -41,6 +41,9 @@ export type OrderWithItems = {
   user_id: string;
   total_amount: number;
   status: "pending" | "confirmed" | "paid" | "cancelled";
+  payment_status?: "unpaid" | "paid" | "refunded";
+  payment_method?: string | null;
+  paid_at?: string | null;
   shipping_address: string | null;
   cancelled_by: string | null;
   cancellation_reason: string | null;
@@ -193,7 +196,7 @@ export async function createOrderFromCart(userId: string, shippingAddress: strin
   }
 
   const { data, error } = await supabase
-    .rpc("checkout_patient_cart", { p_shipping_address: shippingAddress })
+    .rpc("pay_order_with_wallet", { p_shipping_address: shippingAddress })
     .single();
   assertNoSupabaseError(error);
 

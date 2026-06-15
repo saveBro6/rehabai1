@@ -7,7 +7,9 @@ import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { useToast } from "@/hooks/useToast";
+import { getAuthRedirectUrl } from "@/lib/auth-redirects";
 import { getSupabaseClient, getSupabaseConfigError } from "@/lib/supabase-client";
+import { normalizeVietnamMobilePhone, VIETNAM_PHONE_ERROR } from "@/lib/vietnam-phone";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -42,6 +44,12 @@ export default function RegisterPage() {
       return;
     }
 
+    const normalizedPhone = normalizeVietnamMobilePhone(form.phone);
+    if (!normalizedPhone) {
+      pushToast("Số điện thoại không hợp lệ", VIETNAM_PHONE_ERROR);
+      return;
+    }
+
     const supabase = getSupabaseClient();
     if (!supabase) {
       pushToast("Chưa thể đăng ký", getSupabaseConfigError());
@@ -53,9 +61,10 @@ export default function RegisterPage() {
       email: form.email,
       password: form.password,
       options: {
+        emailRedirectTo: getAuthRedirectUrl("/login"),
         data: {
           full_name: form.full_name,
-          phone: form.phone
+          phone: normalizedPhone
         }
       }
     });
@@ -104,7 +113,7 @@ export default function RegisterPage() {
               type="tel"
               required
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition-all focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100" 
-              placeholder="Nhập số điện thoại" 
+              placeholder="Ví dụ: 0914662777"
               value={form.phone} 
               onChange={(event) => setForm({ ...form, phone: event.target.value })} 
             />
