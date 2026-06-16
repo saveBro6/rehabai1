@@ -19,6 +19,7 @@ import {
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { clsx } from "@/lib/utils";
@@ -207,9 +208,7 @@ export function DoctorTopBar() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link aria-label="Thông báo" href="/doctor/notifications" className="rounded-lg p-2 text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700">
-            <Bell className="h-5 w-5" />
-          </Link>
+          <NotificationBell accountType="doctor" />
           <Button className="hidden sm:inline-flex" onClick={logout} variant="secondary">
             Đăng xuất
           </Button>

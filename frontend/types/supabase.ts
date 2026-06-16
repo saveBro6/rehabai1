@@ -110,6 +110,9 @@ export type Database = {
         content: string;
         type: string;
         is_read: boolean;
+        related_entity_type: string | null;
+        related_entity_id: string | null;
+        action_url: string | null;
         created_at: string;
       }>;
       products: TableDefinition<{

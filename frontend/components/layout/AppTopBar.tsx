@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Gift, LogIn, LogOut, Menu, ShoppingCart, UserRound, WalletCards } from "lucide-react";
 
 import { Button } from "@/components/Button";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { TrialOfferModal } from "@/components/subscriptions/TrialOfferModal";
 import { getCartHref, getDashboardHref, getPageTitle, getProfileHref } from "@/config/navigation";
 import { useToast } from "@/hooks/useToast";
@@ -170,6 +171,9 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             >
               <WalletCards className="h-5 w-5" />
             </Link>
+          ) : null}
+          {!isLoading && isAuthenticated && profile?.account_status === "active" && accountType ? (
+            <NotificationBell accountType={accountType} />
           ) : null}
           <Link href={profileHref} aria-label="Hồ sơ" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">
             <UserRound className="h-5 w-5" />

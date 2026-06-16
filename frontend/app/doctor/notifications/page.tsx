@@ -1,59 +1,79 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-import { DoctorNotificationsList, ErrorState, LoadingState } from "@/components/doctor/DoctorComponents";
-import { useAuth } from "@/hooks/useAuth";
+import { NotificationList } from "@/components/notifications/NotificationList";
 import { useToast } from "@/hooks/useToast";
-import { getNotifications, markAllNotificationsRead, markNotificationRead } from "@/services/notifications.service";
+import {
+  getNotifications,
+  markAllNotificationsRead,
+  markNotificationRead
+} from "@/services/notifications.service";
 import type { Notification } from "@/types";
 
 export default function DoctorNotificationsPage() {
-  const { user } = useAuth();
+  const router = useRouter();
   const { pushToast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    if (!user) return;
+  useEffect(() => {
+    let active = true;
     setLoading(true);
     setError("");
-    try {
-      setNotifications(await getNotifications(user.id));
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Không thể tải thông báo.");
-    } finally {
-      setLoading(false);
+    void getNotifications({
+      types: ["appointment_created", "appointment_cancelled_by_patient"]
+    })
+      .then((rows) => {
+        if (active) setNotifications(rows);
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError instanceof Error ? loadError.message : "Không thể tải thông báo.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function openNotification(notification: Notification) {
+    if (!notification.is_read) {
+      await markNotificationRead(notification.id);
+      setNotifications((current) =>
+        current.map((item) => (item.id === notification.id ? { ...item, is_read: true } : item))
+      );
     }
-  }, [user]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  async function read(notification: Notification) {
-    await markNotificationRead(notification.id);
-    pushToast("Đã đánh dấu thông báo đã đọc");
-    await load();
+    if (notification.action_url?.startsWith("/")) router.push(notification.action_url);
   }
 
-  async function readAll() {
-    if (!user) return;
-    await markAllNotificationsRead(user.id);
-    pushToast("Đã đánh dấu tất cả thông báo đã đọc");
-    await load();
+  async function markAll() {
+    await markAllNotificationsRead();
+    setNotifications((current) => current.map((notification) => ({ ...notification, is_read: true })));
+    pushToast("Đã đánh dấu tất cả thông báo là đã đọc.");
   }
 
   return (
     <section className="grid gap-6 pb-20 lg:pb-6">
       <div>
-        <p className="text-sm font-bold uppercase text-emerald-700">Thông báo</p>
-        <h1 className="text-3xl font-bold text-slate-950">Danh sách thông báo</h1>
+        <p className="text-sm font-bold uppercase text-emerald-700">Trung tâm thông báo</p>
+        <h1 className="text-3xl font-bold text-slate-950">Thông báo lịch hẹn</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          Theo dõi yêu cầu lịch hẹn mới và lịch hẹn do Bệnh nhân hủy.
+        </p>
       </div>
-      {loading ? <LoadingState /> : null}
-      {error ? <ErrorState message={error} /> : null}
-      {!loading && !error ? <DoctorNotificationsList notifications={notifications} onRead={read} onReadAll={readAll} /> : null}
+      <NotificationList
+        notifications={notifications}
+        loading={loading}
+        error={error}
+        emptyMessage="Chưa có thông báo lịch hẹn."
+        onOpen={(notification) => void openNotification(notification)}
+        onMarkAll={() => void markAll()}
+      />
     </section>
   );
 }

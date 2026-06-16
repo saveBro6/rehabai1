@@ -49,6 +49,12 @@ export const patientSidebarItems: SidebarItem[] = [
     requiresAuth: true
   },
   {
+    label: "Thông báo",
+    href: "/patient/notifications",
+    icon: Bell,
+    requiresAuth: true
+  },
+  {
     label: "Bài tập",
     href: "/patient/exercises",
     icon: Dumbbell,
@@ -152,6 +158,7 @@ export const pageTitles: Record<string, string> = {
   "/patient/dashboard": "Tổng quan",
   "/patient/doctors": "Bác sĩ",
   "/patient/appointments": "Lịch hẹn",
+  "/patient/notifications": "Thông báo",
   "/patient/exercises": "Bài tập",
   "/patient/recovery-plan": "Lộ trình",
   "/patient/progress": "Tiến trình",
