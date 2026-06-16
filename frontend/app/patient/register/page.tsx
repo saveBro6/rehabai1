@@ -61,7 +61,7 @@ export default function RegisterPage() {
       email: form.email,
       password: form.password,
       options: {
-        emailRedirectTo: getAuthRedirectUrl("/login"),
+        emailRedirectTo: getAuthRedirectUrl("/login?verified=1"),
         data: {
           full_name: form.full_name,
           phone: normalizedPhone
@@ -77,7 +77,7 @@ export default function RegisterPage() {
 
     if (!data.session) {
       setLoading(false);
-      pushToast("Vui lòng xác nhận email", "Tài khoản đã được tạo. Hãy kiểm tra email để hoàn tất đăng ký.");
+      pushToast("Đăng ký thành công", "Vui lòng kiểm tra email để xác thực tài khoản trước khi đăng nhập.");
       return;
     }
 

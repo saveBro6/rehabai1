@@ -32,6 +32,7 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const emailVerified = searchParams.get("verified") === "1";
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -91,6 +92,11 @@ function LoginForm() {
     <section className="mx-auto grid min-h-[70vh] max-w-md content-center px-4 py-16">
       <Card className="border-emerald-100 shadow-md">
         <h1 className="text-2xl font-bold text-emerald-950">Đăng nhập RehabAI</h1>
+        {emailVerified ? (
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+            Xác thực email thành công. Bạn có thể đăng nhập.
+          </div>
+        ) : null}
         <form onSubmit={submit} className="mt-6 grid gap-4">
           <div className="grid gap-1.5">
             <label htmlFor="email" className="text-sm font-medium text-slate-700">Email</label>
