@@ -41,19 +41,14 @@ export async function getMyWallet() {
 }
 
 export async function getMyWalletTopups() {
-  const response = await fetch("/api/wallet/topups", {
-    method: "GET",
-    cache: "no-store"
-  });
-  const data = (await response.json().catch(() => null)) as
-    | { topups?: WalletTopup[]; message?: string }
-    | null;
-
-  if (!response.ok) {
-    throw new Error(data?.message || "Không thể tải lịch sử nạp ví.");
-  }
-
-  return data?.topups || [];
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("wallet_topups")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  assertNoSupabaseError(error);
+  return (data || []) as WalletTopup[];
 }
 
 export async function getMyWalletTransactions() {
@@ -106,22 +101,17 @@ export function isPayosNotConfiguredError(error: unknown) {
 }
 
 export async function cancelWalletTopup(topupId: string) {
-  const response = await fetch(`/api/wallet/topups/${encodeURIComponent(topupId)}/cancel`, {
-    method: "POST"
-  });
-  const data = (await response.json().catch(() => null)) as
-    | { topup?: WalletTopup; message?: string }
-    | null;
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .rpc("cancel_own_pending_wallet_topup", { target_topup_id: topupId })
+    .single();
+  assertNoSupabaseError(error);
 
-  if (!response.ok) {
-    throw new Error(data?.message || "Không thể hủy giao dịch nạp ví.");
-  }
-
-  if (!data?.topup) {
+  if (!data) {
     throw new Error("Không thể tải trạng thái giao dịch sau khi hủy.");
   }
 
-  return data.topup;
+  return data as WalletTopup;
 }
 
 export async function confirmSimulatedWalletTopup(topupId: string): Promise<WalletTopupResult> {

@@ -506,6 +506,10 @@ export type Database = {
         Args: { target_topup_id: string };
         Returns: Database["public"]["Tables"]["wallet_topups"]["Row"];
       };
+      cancel_own_pending_wallet_topup: {
+        Args: { target_topup_id: string };
+        Returns: Database["public"]["Tables"]["wallet_topups"]["Row"];
+      };
       complete_provider_wallet_topup: {
         Args: {
           p_provider: string;
