@@ -5345,6 +5345,10 @@ begin
     raise exception 'Wallet top-up was not found.';
   end if;
 
+  if v_topup.provider <> 'simulated' then
+    raise exception 'Only simulated wallet top-ups can be confirmed through this flow.';
+  end if;
+
   if v_topup.status = 'completed' then
     return v_topup;
   end if;
@@ -5408,6 +5412,8 @@ begin
 end;
 $$;
 
+comment on function public.confirm_simulated_wallet_topup(uuid)
+is 'Browser-callable simulated wallet top-up confirmation. Validates active Patient ownership and rejects payOS/provider top-ups before atomically crediting the wallet.';
 
 create or replace function public.pay_order_with_wallet(p_shipping_address text)
 returns table (
