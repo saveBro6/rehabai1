@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { CalendarDays, CreditCard, ShieldCheck, Upload, X } from "lucide-react";
 import Link from "next/link";
+import { CalendarDays, CreditCard, HeartPulse, Mail, MapPin, Phone, ShieldCheck, Upload, UserRound, X } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/Button";
@@ -29,8 +29,14 @@ const benefitSummaries: Record<string, string> = {
   Premium: "Quyền Standard, ưu tiên tư vấn và báo cáo nâng cao."
 };
 
-function formatDate(value?: string | null) {
-  if (!value) return "Chưa có";
+const genderLabels: Record<NonNullable<User["gender"]>, string> = {
+  male: "Nam",
+  female: "Nữ",
+  other: "Khác"
+};
+
+function formatDate(value?: string | null, fallback = "Chưa có") {
+  if (!value) return fallback;
   return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(value));
 }
 
@@ -140,6 +146,7 @@ export default function ProfilePage() {
         date_of_birth: user.date_of_birth,
         address: user.address,
         medical_condition: user.medical_condition,
+        gender: user.gender,
         avatar_url: avatarUrl
       });
       setUser({ ...user, ...updated });
@@ -177,117 +184,181 @@ export default function ProfilePage() {
   const statusLabel = subscription ? statusLabels[subscription.status] : "Chưa có gói";
   const isPending = subscription?.status === "pending_payment";
   const isActive = subscription?.status === "active";
+  const avatarSrc = avatarPreviewUrl || (user.avatar_url ? getImageUrl(user.avatar_url) : "");
 
   return (
     <RequireAuth>
       <section className="mx-auto max-w-7xl px-4 py-10">
-        <div>
-          <p className="text-sm font-bold uppercase text-emerald-700">Hồ sơ</p>
-          <h1 className="mt-2 text-3xl font-bold text-slate-950">Thông tin cá nhân và gói đăng ký</h1>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Hồ sơ bệnh nhân</p>
+            <h1 className="mt-2 text-3xl font-bold text-slate-950">Thông tin cá nhân</h1>
+            <p className="mt-3 max-w-2xl text-slate-600">Quản lý thông tin liên hệ, ảnh đại diện và ghi chú sức khỏe cơ bản của bạn.</p>
+          </div>
+          <Link href="/patient/medical-record">
+            <Button variant="secondary" type="button">
+              Xem hồ sơ bệnh án
+            </Button>
+          </Link>
         </div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <Card>
-            <h2 className="text-xl font-bold text-slate-950">Thông tin người dùng</h2>
-            <form onSubmit={submit} className="mt-6 grid gap-4">
-              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center">
-                <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border border-emerald-100 bg-white">
-                  {avatarPreviewUrl || user.avatar_url ? (
-                    <Image
-                      src={avatarPreviewUrl || getImageUrl(user.avatar_url)}
-                      alt={user.full_name}
-                      fill
-                      className="object-cover"
-                    />
+          <div className="grid gap-6">
+            <Card className="border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-white">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-3xl border-4 border-white bg-emerald-100 shadow-sm">
+                  {avatarSrc ? (
+                    <Image src={avatarSrc} alt={user.full_name} fill className="object-cover" />
                   ) : (
-                    <div className="grid h-full w-full place-items-center bg-emerald-100 text-2xl font-bold text-emerald-700">
+                    <div className="grid h-full w-full place-items-center text-4xl font-bold text-emerald-700">
                       {user.full_name.slice(0, 1).toUpperCase()}
                     </div>
                   )}
                 </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-slate-950">Ảnh đại diện</p>
-                  <p className="mt-1 text-sm text-slate-600">Chọn ảnh JPG, PNG hoặc WebP tối đa 5MB. Ảnh sẽ được tải lên khi bạn bấm Lưu hồ sơ.</p>
-                  <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">
-                    <Upload className="h-4 w-4" />
-                    Chọn ảnh
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-2xl font-bold text-slate-950">{user.full_name || "Chưa cập nhật tên"}</h2>
+                  <div className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                    <p className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-emerald-600" />
+                      {user.email}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-emerald-600" />
+                      {user.phone || "Chưa cập nhật số điện thoại"}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4 text-emerald-600" />
+                      {formatDate(user.date_of_birth, "Chưa cập nhật ngày sinh")}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <UserRound className="h-4 w-4 text-emerald-600" />
+                      {user.gender ? genderLabels[user.gender] : "Chưa cập nhật giới tính"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-100 text-emerald-700">
+                  <UserRound className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-950">Cập nhật hồ sơ bệnh nhân</h2>
+                  <p className="mt-1 text-sm text-slate-500">Các thay đổi sẽ được lưu vào hồ sơ cá nhân của bạn.</p>
+                </div>
+              </div>
+
+              <form onSubmit={submit} className="mt-6 grid gap-5">
+                <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center">
+                  <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-emerald-100 bg-white">
+                    {avatarSrc ? (
+                      <Image src={avatarSrc} alt={user.full_name} fill className="object-cover" />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center bg-emerald-100 text-2xl font-bold text-emerald-700">
+                        {user.full_name.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-950">Ảnh đại diện</p>
+                    <p className="mt-1 text-sm text-slate-600">Chọn ảnh JPG, PNG hoặc WebP tối đa 5MB. Ảnh sẽ được tải lên khi bạn bấm Lưu hồ sơ.</p>
+                    <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">
+                      <Upload className="h-4 w-4" />
+                      Chọn ảnh
+                      <input
+                        className="sr-only"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(event) => selectAvatar(event.target.files?.[0])}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                    Họ và tên
                     <input
-                      className="sr-only"
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={(event) => selectAvatar(event.target.files?.[0])}
+                      className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                      value={user.full_name}
+                      onChange={(event) => setUser({ ...user, full_name: event.target.value })}
                     />
                   </label>
-                </div>
-              </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-slate-700">Họ và tên</label>
-                  <input
-                    className="rounded-lg border border-slate-300 px-3 py-2"
-                    value={user.full_name}
-                    onChange={(event) => setUser({ ...user, full_name: event.target.value })}
+                  <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                    Email
+                    <input className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 font-normal text-slate-500" value={user.email} readOnly />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                    Số điện thoại
+                    <input
+                      className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                      value={user.phone || ""}
+                      onChange={(event) => setUser({ ...user, phone: event.target.value })}
+                      placeholder="Ví dụ: 0914662777"
+                      inputMode="tel"
+                    />
+                  </label>
+
+                  <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                    Ngày sinh
+                    <input
+                      className="rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                      type="date"
+                      value={user.date_of_birth || ""}
+                      onChange={(event) => setUser({ ...user, date_of_birth: event.target.value })}
+                    />
+                  </label>
+
+                  <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                    Giới tính
+                    <select
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+                      value={user.gender || ""}
+                      onChange={(event) => setUser({ ...user, gender: (event.target.value || undefined) as User["gender"] })}
+                    >
+                      <option value="">Chưa cập nhật</option>
+                      <option value="male">Nam</option>
+                      <option value="female">Nữ</option>
+                      <option value="other">Khác</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                  Địa chỉ
+                  <textarea
+                    className="min-h-24 rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                    value={user.address || ""}
+                    onChange={(event) => setUser({ ...user, address: event.target.value })}
+                    placeholder="Nhập địa chỉ hiện tại"
                   />
-                </div>
+                </label>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-slate-700">Email</label>
-                  <input className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-slate-500" value={user.email} readOnly />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-slate-700">Số điện thoại</label>
-                  <input
-                    className="rounded-lg border border-slate-300 px-3 py-2"
-                    value={user.phone || ""}
-                    onChange={(event) => setUser({ ...user, phone: event.target.value })}
-                    placeholder="Ví dụ: 0914662777"
-                    inputMode="tel"
+                <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+                  Ghi chú sức khỏe / chẩn đoán
+                  <textarea
+                    className="min-h-24 rounded-lg border border-slate-300 px-3 py-2 font-normal"
+                    value={user.medical_condition || ""}
+                    onChange={(event) => setUser({ ...user, medical_condition: event.target.value })}
+                    placeholder="Mô tả tình trạng sức khỏe hoặc yêu cầu hỗ trợ"
                   />
-                  <p className="text-xs text-slate-500">Chỉ nhận số di động Việt Nam; hệ thống lưu theo dạng +84.</p>
+                </label>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-slate-500">Số điện thoại chỉ nhận số di động Việt Nam; hệ thống lưu theo dạng +84.</p>
+                  <Button>Lưu hồ sơ</Button>
                 </div>
+              </form>
+            </Card>
+          </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-slate-700">Ngày sinh</label>
-                  <input
-                    className="rounded-lg border border-slate-300 px-3 py-2"
-                    type="date"
-                    value={user.date_of_birth || ""}
-                    onChange={(event) => setUser({ ...user, date_of_birth: event.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-slate-700">Địa chỉ</label>
-                <textarea
-                  className="min-h-24 rounded-lg border border-slate-300 px-3 py-2"
-                  value={user.address || ""}
-                  onChange={(event) => setUser({ ...user, address: event.target.value })}
-                  placeholder="Nhập địa chỉ hiện tại"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-slate-700">Ghi chú hỗ trợ / sức khỏe</label>
-                <textarea
-                  className="min-h-24 rounded-lg border border-slate-300 px-3 py-2"
-                  value={user.medical_condition || ""}
-                  onChange={(event) => setUser({ ...user, medical_condition: event.target.value })}
-                  placeholder="Mô tả tình trạng sức khỏe hoặc yêu cầu hỗ trợ"
-                />
-              </div>
-
-              <div>
-                <Button>Lưu hồ sơ</Button>
-              </div>
-            </form>
-          </Card>
-
-          <aside className="grid gap-5">
+          <aside className="grid gap-5 self-start">
             <Card className={isPending ? "border-amber-200 bg-amber-50" : isActive ? "border-emerald-100 bg-emerald-50" : ""}>
               <div className="flex items-start gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-lg bg-white text-emerald-700 shadow-sm">
@@ -353,12 +424,18 @@ export default function ProfilePage() {
 
             <Card>
               <div className="flex items-center gap-2 text-slate-700">
-                <CalendarDays className="h-5 w-5 text-emerald-600" />
-                <h2 className="font-bold">Lưu ý MVP</h2>
+                <MapPin className="h-5 w-5 text-emerald-600" />
+                <h2 className="font-bold">Địa chỉ hiện tại</h2>
               </div>
-              <p className="mt-3 text-sm text-slate-600">
-                Thanh toán gói hiện là mô phỏng. Hệ thống chỉ kích hoạt quyền truy cập sau khi bạn xác nhận thanh toán giả lập.
-              </p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{user.address || "Chưa cập nhật địa chỉ."}</p>
+            </Card>
+
+            <Card>
+              <div className="flex items-center gap-2 text-slate-700">
+                <HeartPulse className="h-5 w-5 text-emerald-600" />
+                <h2 className="font-bold">Ghi chú sức khỏe</h2>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{user.medical_condition || "Chưa cập nhật ghi chú sức khỏe."}</p>
             </Card>
           </aside>
         </div>

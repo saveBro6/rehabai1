@@ -30,72 +30,19 @@ export type SidebarItem = {
 };
 
 export const patientSidebarItems: SidebarItem[] = [
-  {
-    label: "Tổng quan",
-    href: "/patient/dashboard",
-    icon: LayoutDashboard,
-    requiresAuth: true
-  },
-  {
-    label: "Bác sĩ",
-    href: "/patient/doctors",
-    icon: Stethoscope,
-    requiresAuth: false
-  },
-  {
-    label: "Lịch hẹn",
-    href: "/patient/appointments",
-    icon: CalendarCheck,
-    requiresAuth: true
-  },
-  {
-    label: "Thông báo",
-    href: "/patient/notifications",
-    icon: Bell,
-    requiresAuth: true
-  },
-  {
-    label: "Bài tập",
-    href: "/patient/exercises",
-    icon: Dumbbell,
-    requiresAuth: false
-  },
-  {
-    label: "Lộ trình",
-    href: "/patient/recovery-plan",
-    icon: Route,
-    requiresAuth: true
-  },
-  {
-    label: "Tiến trình",
-    href: "/patient/progress",
-    icon: TrendingUp,
-    requiresAuth: true
-  },
-  {
-    label: "Sản phẩm",
-    href: "/patient/products",
-    icon: ShoppingBag,
-    requiresAuth: false
-  },
-  {
-    label: "Đơn hàng",
-    href: "/patient/orders",
-    icon: FileText,
-    requiresAuth: true
-  },
-  {
-    label: "Ví của tôi",
-    href: "/patient/wallet",
-    icon: WalletCards,
-    requiresAuth: true
-  },
-  {
-    label: "Bảng giá",
-    href: "/patient/pricing",
-    icon: CreditCard,
-    requiresAuth: false
-  }
+  { label: "Tổng quan", href: "/patient/dashboard", icon: LayoutDashboard, requiresAuth: true },
+  { label: "Bác sĩ", href: "/patient/doctors", icon: Stethoscope, requiresAuth: false },
+  { label: "Lịch hẹn", href: "/patient/appointments", icon: CalendarCheck, requiresAuth: true },
+  { label: "Thông báo", href: "/patient/notifications", icon: Bell, requiresAuth: true },
+  { label: "Bài tập", href: "/patient/exercises", icon: Dumbbell, requiresAuth: false },
+  { label: "Lộ trình", href: "/patient/recovery-plan", icon: Route, requiresAuth: true },
+  { label: "Tiến trình", href: "/patient/progress", icon: TrendingUp, requiresAuth: true },
+  { label: "Hồ sơ bệnh nhân", href: "/patient/profile", icon: UserRound, requiresAuth: true },
+  { label: "Hồ sơ bệnh án", href: "/patient/medical-record", icon: FileText, requiresAuth: true },
+  { label: "Sản phẩm", href: "/patient/products", icon: ShoppingBag, requiresAuth: false },
+  { label: "Đơn hàng", href: "/patient/orders", icon: FileText, requiresAuth: true },
+  { label: "Ví của tôi", href: "/patient/wallet", icon: WalletCards, requiresAuth: true },
+  { label: "Bảng giá", href: "/patient/pricing", icon: CreditCard, requiresAuth: false }
 ];
 
 export const doctorSidebarItems: SidebarItem[] = [
@@ -166,7 +113,8 @@ export const pageTitles: Record<string, string> = {
   "/patient/orders": "Đơn hàng",
   "/patient/wallet": "Ví RehabAI",
   "/patient/pricing": "Bảng giá",
-  "/patient/profile": "Hồ sơ",
+  "/patient/profile": "Hồ sơ bệnh nhân",
+  "/patient/medical-record": "Hồ sơ bệnh án",
   "/patient/cart": "Giỏ hàng",
   "/login": "Đăng nhập",
   "/patient/register": "Đăng ký"
