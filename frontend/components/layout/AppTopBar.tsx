@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Gift, LogIn, LogOut, Menu, ShoppingCart, UserRound, WalletCards } from "lucide-react";
+import { Crown, Gift, LogIn, LogOut, Menu, Phone, ShieldCheck, ShoppingCart, UserRound, WalletCards } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -33,6 +33,8 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
   const cartPath = getCartHref(accountType);
   const cartHref = cartPath ? (isLoading ? cartPath : getProtectedHref(isAuthenticated, cartPath)) : null;
   const profileHref = isLoading ? "/patient/profile" : getProtectedHref(isAuthenticated, getProfileHref(accountType));
+  const pricingHref = isLoading ? "/patient/pricing" : getProtectedHref(isAuthenticated, "/patient/pricing");
+  const usePublicLandingHeader = pathname === "/" && !isLoading && !isAuthenticated;
   const trialEligible = Boolean(trialEligibility?.eligible);
   const trialNeedsPhone = trialEligibility?.ineligibility_reason === "missing_phone";
   const showTrialButton = trialEligible || trialNeedsPhone;
@@ -110,6 +112,136 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
     router.push("/login");
   }
 
+  if (usePublicLandingHeader) {
+    const publicNavItems = [
+      { label: "Trang chủ", href: "/" },
+      { label: "Bài tập", href: "/patient/exercises" },
+      { label: "Bác sĩ", href: "/patient/doctors" },
+      { label: "Sản phẩm", href: "/patient/products" },
+      { label: "Bảng giá", href: "/patient/pricing" },
+      { label: "Về chúng tôi", href: "#about" }
+    ];
+
+    return (
+      <header className="sticky top-0 z-40 border-b border-emerald-100 bg-white/95 shadow-sm shadow-emerald-950/5 backdrop-blur">
+        <div className="hidden border-b border-emerald-50 bg-emerald-50/70 px-4 py-1.5 text-xs font-semibold text-emerald-900 md:block">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+            <span className="inline-flex items-center gap-2">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Nền tảng phục hồi chức năng tại nhà được tin dùng bởi 10.000+ người Việt
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <Phone className="h-3.5 w-3.5" />
+              Tư vấn miễn phí: 1900 1234
+            </span>
+          </div>
+        </div>
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4">
+          <div className="flex items-center gap-3">
+            <button
+              aria-label="Mở menu điều hướng"
+              className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 lg:hidden"
+              onClick={onMenuClick}
+              type="button"
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <Link href="/" className="flex items-center gap-2 text-xl font-black text-emerald-700 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100 text-emerald-700">R</span>
+              RehabAI
+            </Link>
+          </div>
+
+          <nav className="hidden items-center gap-7 lg:flex">
+            {publicNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="relative py-2 text-sm font-black text-slate-700 transition hover:text-emerald-700"
+              >
+                {item.label}
+                {item.href === "/" ? <span className="absolute inset-x-0 -bottom-1 h-0.5 rounded-full bg-emerald-600" /> : null}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            {!isLoading && isAuthenticated ? (
+              <Link href={dashboardHref} className="hidden min-h-10 items-center justify-center rounded-lg px-3 py-2 text-sm font-black text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 sm:inline-flex">
+                {accountType === "admin" ? "Quản trị" : "Tổng quan"}
+              </Link>
+            ) : null}
+            {!isLoading && !isAuthenticated ? (
+              <Link href="/login" className="hidden min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-black text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 sm:inline-flex">
+                <UserRound className="h-4 w-4" />
+                Đăng nhập
+              </Link>
+            ) : null}
+            {!isLoading && showTrialButton ? (
+              <button
+                type="button"
+                className="hidden min-h-10 items-center justify-center rounded-lg border border-emerald-200 px-3 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-50 lg:inline-flex"
+                onClick={() => setTrialModalOpen(true)}
+              >
+                Dùng thử 7 ngày
+              </button>
+            ) : null}
+            {!isLoading && !isAuthenticated ? (
+              <Link href={pricingHref} className="hidden min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 sm:inline-flex">
+                <Crown className="h-4 w-4" />
+                Chọn gói ngay
+              </Link>
+            ) : null}
+            {!isLoading && isAuthenticated ? (
+              <>
+                <Link
+                  href={profileHref}
+                  aria-label="Hồ sơ"
+                  className="hidden rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 sm:inline-flex"
+                >
+                  <UserRound className="h-5 w-5" />
+                </Link>
+                <button
+                  type="button"
+                  className="hidden min-h-10 items-center justify-center gap-2 rounded-lg border border-emerald-200 px-3 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 sm:inline-flex"
+                  onClick={logout}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Đăng xuất
+                </button>
+                <button
+                  type="button"
+                  aria-label="Đăng xuất"
+                  className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 sm:hidden"
+                  onClick={logout}
+                >
+                  <LogOut className="h-5 w-5" />
+                </button>
+              </>
+            ) : null}
+            {!isLoading && !isAuthenticated ? (
+              <Link
+                href="/login"
+                aria-label="Đăng nhập"
+                className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 sm:hidden"
+              >
+                <LogIn className="h-5 w-5" />
+              </Link>
+            ) : null}
+          </div>
+        </div>
+        <TrialOfferModal
+          open={trialModalOpen}
+          loading={trialLoading}
+          startDisabled={!trialEligible}
+          message={trialMessage}
+          onClose={closeTrialModal}
+          onStart={startTrial}
+        />
+      </header>
+    );
+  }
+
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-emerald-100 bg-white/90 backdrop-blur">
       <div className="flex h-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
@@ -181,10 +313,10 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           {!isLoading && isAuthenticated ? (
             <>
               <Button variant="secondary" className="hidden border-emerald-200 text-emerald-700 hover:bg-emerald-50 sm:inline-flex" onClick={logout}>
-                Dang xuat
+                Đăng xuất
               </Button>
               <button
-                aria-label="Dang xuat"
+                aria-label="Đăng xuất"
                 className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 sm:hidden"
                 onClick={logout}
                 type="button"
