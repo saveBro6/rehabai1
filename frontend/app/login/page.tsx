@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/useToast";
 import { getAuthRedirectUrl } from "@/lib/auth-redirects";
 import { isSafeRedirectPath } from "@/lib/auth-navigation";
 import { getSupabaseClient, getSupabaseConfigError } from "@/lib/supabase-client";
+import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/config";
 import { getUserProfile } from "@/services/users.service";
 import type { User as AppUserProfile } from "@/types";
 
@@ -71,10 +72,16 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
+  const hasSupabasePublicConfig = Boolean(getSupabaseUrl() && getSupabaseKey());
   const emailVerified = searchParams.get("verified") === "1";
   const oauthErrorMessage = getOAuthErrorMessage(searchParams.get("oauth_error"));
 
   async function continueWithGoogle() {
+    if (!hasSupabasePublicConfig) {
+      pushToast("Chưa thể đăng nhập bằng Google", getSupabaseConfigError());
+      return;
+    }
+
     const supabase = getSupabaseClient();
     if (!supabase) {
       pushToast("Chưa thể đăng nhập", getSupabaseConfigError());
@@ -166,10 +173,22 @@ function LoginForm() {
           </div>
         ) : null}
 
-        <Button className="mt-6 w-full border-slate-200 bg-white text-slate-800 shadow-sm hover:border-slate-300 hover:bg-white hover:shadow-md" disabled={oauthLoading || loading} onClick={continueWithGoogle} type="button" variant="secondary">
+        {!hasSupabasePublicConfig ? (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            Chưa cấu hình Supabase public env nên chưa thể đăng nhập bằng Google.
+          </div>
+        ) : null}
+
+        <button
+          className="mt-6 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+          data-oauth-google="login"
+          disabled={!hasSupabasePublicConfig || oauthLoading || loading}
+          onClick={continueWithGoogle}
+          type="button"
+        >
           <GoogleLogo />
           {oauthLoading ? "Đang chuyển đến Google..." : "Tiếp tục với Google"}
-        </Button>
+        </button>
 
         <div className="my-5 flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
           <span className="h-px flex-1 bg-slate-200" />
