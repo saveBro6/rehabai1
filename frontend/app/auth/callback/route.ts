@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getDashboardHref } from "@/config/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 function redirectTo(request: NextRequest, path: string) {
@@ -42,7 +43,14 @@ export async function GET(request: NextRequest) {
 
   if (userError || !user) return redirectTo(request, "/login?oauth_error=session");
 
-  const { data: existingAccount, error: accountLookupError } = await supabase
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return redirectTo(request, "/login?oauth_error=server_config");
+  }
+
+  const { data: existingAccount, error: accountLookupError } = await admin
     .from("accounts")
     .select("id, account_type, account_status, must_change_password")
     .eq("id", user.id)
@@ -58,7 +66,7 @@ export async function GET(request: NextRequest) {
     const fullName = getDisplayName(email, metadata);
     const avatarUrl = getSafeGoogleAvatarUrl(metadata.avatar_url) || getSafeGoogleAvatarUrl(metadata.picture);
 
-    const { data: createdAccount, error: createAccountError } = await supabase
+    const { data: createdAccount, error: createAccountError } = await admin
       .from("accounts")
       .insert({
         id: user.id,
@@ -71,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     if (createAccountError) return redirectTo(request, "/login?oauth_error=profile");
 
-    const { error: createPatientError } = await supabase.from("patients").insert({
+    const { error: createPatientError } = await admin.from("patients").insert({
       id: user.id,
       full_name: fullName,
       phone: null,
@@ -84,16 +92,25 @@ export async function GET(request: NextRequest) {
     const metadata = user.user_metadata || {};
     const email = user.email || "";
     const avatarUrl = getSafeGoogleAvatarUrl(metadata.avatar_url) || getSafeGoogleAvatarUrl(metadata.picture);
-    const { data: patient } = await supabase.from("patients").select("id, avatar_url").eq("id", user.id).maybeSingle();
+    const { data: patient, error: patientLookupError } = await admin
+      .from("patients")
+      .select("id, avatar_url")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (patientLookupError) return redirectTo(request, "/login?oauth_error=profile");
+
     if (!patient) {
-      await supabase.from("patients").insert({
+      const { error: createPatientError } = await admin.from("patients").insert({
         id: user.id,
         full_name: getDisplayName(email, metadata),
         phone: null,
         avatar_url: avatarUrl
       });
+      if (createPatientError) return redirectTo(request, "/login?oauth_error=profile");
     } else if (!patient.avatar_url && avatarUrl) {
-      await supabase.from("patients").update({ avatar_url: avatarUrl }).eq("id", user.id);
+      const { error: updatePatientError } = await admin.from("patients").update({ avatar_url: avatarUrl }).eq("id", user.id);
+      if (updatePatientError) return redirectTo(request, "/login?oauth_error=profile");
     }
   }
 

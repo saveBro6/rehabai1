@@ -4,7 +4,7 @@ function getConfiguredSiteOrigin() {
 
 export function getAuthRedirectUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const origin = getConfiguredSiteOrigin() || (typeof window !== "undefined" ? window.location.origin : "");
+  const origin = typeof window !== "undefined" ? window.location.origin : getConfiguredSiteOrigin() || "";
 
   return `${origin}${normalizedPath}`;
 }

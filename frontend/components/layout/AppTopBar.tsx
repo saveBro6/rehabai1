@@ -109,7 +109,8 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
 
   async function logout() {
     await signOut();
-    router.push("/login");
+    router.replace("/login");
+    router.refresh();
   }
 
   if (usePublicLandingHeader) {

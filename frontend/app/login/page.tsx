@@ -26,6 +26,20 @@ function getErrorMessage(error: unknown) {
   return "Unknown error.";
 }
 
+function getOAuthErrorMessage(code: string | null) {
+  if (!code) return null;
+
+  const messages: Record<string, string> = {
+    callback: "Khong the hoan tat xac thuc Google. Vui long thu lai.",
+    session: "Google da xac thuc nhung ung dung chua nhan duoc phien dang nhap. Vui long thu lai.",
+    profile: "Google da xac thuc nhung chua the tao hoac tai ho so RehabAI.",
+    inactive: "Tai khoan cua ban chua o trang thai hoat dong.",
+    server_config: "May chu chua duoc cau hinh day du de hoan tat dang nhap Google."
+  };
+
+  return messages[code] || "Khong the hoan tat dang nhap Google. Vui long thu lai.";
+}
+
 function GoogleLogo() {
   return (
     <svg aria-hidden="true" className="mr-3 h-5 w-5" viewBox="0 0 24 24">
@@ -58,6 +72,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const emailVerified = searchParams.get("verified") === "1";
+  const oauthErrorMessage = getOAuthErrorMessage(searchParams.get("oauth_error"));
 
   async function continueWithGoogle() {
     const supabase = getSupabaseClient();
@@ -142,6 +157,12 @@ function LoginForm() {
         {emailVerified ? (
           <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
             Xác thực email thành công. Bạn có thể đăng nhập.
+          </div>
+        ) : null}
+
+        {oauthErrorMessage ? (
+          <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+            {oauthErrorMessage}
           </div>
         ) : null}
 

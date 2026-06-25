@@ -29,7 +29,11 @@ export function useAuth(): UseAuthResult {
       return;
     }
 
-    setProfile(await getUserProfile(authUser.id));
+    try {
+      setProfile(await getUserProfile(authUser.id));
+    } catch {
+      setProfile(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -104,6 +108,7 @@ export function useAuth(): UseAuthResult {
     }
     setUser(null);
     setProfile(null);
+    setIsLoading(false);
   }, []);
 
   return {
