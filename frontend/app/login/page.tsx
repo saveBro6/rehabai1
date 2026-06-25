@@ -8,7 +8,6 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { getDashboardHref } from "@/config/navigation";
 import { useToast } from "@/hooks/useToast";
-import { getAuthRedirectUrl } from "@/lib/auth-redirects";
 import { isSafeRedirectPath } from "@/lib/auth-navigation";
 import { getSupabaseClient, getSupabaseConfigError } from "@/lib/supabase-client";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/config";
@@ -89,10 +88,13 @@ function LoginForm() {
     }
 
     setOauthLoading(true);
+    const redirectTo = `${window.location.origin}/auth/callback`;
+    console.info("[oauth] redirectTo", redirectTo);
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: getAuthRedirectUrl("/auth/callback")
+        redirectTo
       }
     });
 
