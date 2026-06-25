@@ -41,14 +41,17 @@ export async function getMyWallet() {
 }
 
 export async function getMyWalletTopups() {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("wallet_topups")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(20);
-  assertNoSupabaseError(error);
-  return (data || []) as WalletTopup[];
+  const response = await fetch("/api/wallet/topups", {
+    method: "GET",
+    headers: { "Content-Type": "application/json" }
+  });
+  const data = (await response.json().catch(() => null)) as { topups?: WalletTopup[]; message?: string } | null;
+
+  if (!response.ok) {
+    throw new Error(data?.message || "Khong the tai lich su nap vi.");
+  }
+
+  return data?.topups || [];
 }
 
 export async function getMyWalletTransactions() {
