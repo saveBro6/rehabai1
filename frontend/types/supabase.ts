@@ -354,6 +354,12 @@ export type Database = {
         notes: string | null;
         created_at: string;
       }>;
+      patient_saved_exercises: TableDefinition<{
+        id: string;
+        patient_id: string;
+        exercise_id: string;
+        created_at: string;
+      }>;
     };
     Views: {
       exercise_public_metadata: TableDefinition<{

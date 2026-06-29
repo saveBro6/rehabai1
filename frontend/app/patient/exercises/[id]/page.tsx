@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 
 import { ExerciseDetail } from "@/components/exercises/ExerciseDetail";
 import { useAuth } from "@/hooks/useAuth";
-import { getExerciseById, getExerciseVideoAccess } from "@/services/exercises.service";
+import { getExerciseById, getExercises, getExerciseVideoAccess } from "@/services/exercises.service";
 import type { ExerciseVideoAccess, PublicExerciseMetadata } from "@/types";
 
 function ExerciseDetailContent({ id }: { id: string }) {
   const { isAuthenticated, isLoading: authLoading, profile } = useAuth();
   const [exercise, setExercise] = useState<PublicExerciseMetadata | null>(null);
+  const [relatedExercises, setRelatedExercises] = useState<PublicExerciseMetadata[]>([]);
   const [videoAccess, setVideoAccess] = useState<ExerciseVideoAccess | null>(null);
   const [loadingExercise, setLoadingExercise] = useState(true);
   const [loadingVideoAccess, setLoadingVideoAccess] = useState(false);
@@ -24,6 +25,27 @@ function ExerciseDetailContent({ id }: { id: string }) {
       .then((row) => {
         if (!active) return;
         setExercise(row);
+        if (!row) {
+          setRelatedExercises([]);
+          return;
+        }
+
+        void getExercises({ body_region: row.body_region })
+          .then((rows) => {
+            if (!active) return;
+            const related = rows.filter((item) => item.id !== row.id).slice(0, 4);
+            if (related.length) {
+              setRelatedExercises(related);
+              return;
+            }
+
+            void getExercises({ category: row.category }).then((categoryRows) => {
+              if (active) setRelatedExercises(categoryRows.filter((item) => item.id !== row.id).slice(0, 4));
+            });
+          })
+          .catch(() => {
+            if (active) setRelatedExercises([]);
+          });
       })
       .catch((loadError) => {
         if (!active) return;
@@ -93,15 +115,14 @@ function ExerciseDetailContent({ id }: { id: string }) {
   }
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-10">
-      <ExerciseDetail
-        exercise={exercise}
-        isAuthenticated={isAuthenticated}
-        accountType={profile?.account_type || null}
-        videoAccess={videoAccess}
-        videoAccessLoading={authLoading || loadingVideoAccess}
-      />
-    </section>
+    <ExerciseDetail
+      exercise={exercise}
+      isAuthenticated={isAuthenticated}
+      accountType={profile?.account_type || null}
+      videoAccess={videoAccess}
+      videoAccessLoading={authLoading || loadingVideoAccess}
+      relatedExercises={relatedExercises}
+    />
   );
 }
 

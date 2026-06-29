@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
@@ -22,10 +23,19 @@ import {
 } from "lucide-react";
 
 import { ExerciseCard } from "@/components/exercises/ExerciseCard";
+import { useAuth } from "@/hooks/useAuth";
 import { useSubscriptionAccess } from "@/hooks/useSubscriptionAccess";
+import { useToast } from "@/hooks/useToast";
 import { hasPlanAccess } from "@/lib/subscription-access";
 import { clsx } from "@/lib/utils";
-import { getExerciseDifficultyLabel, getExerciseFilterOptions, getExercises, type ExerciseFilterOptions } from "@/services/exercises.service";
+import {
+  getExerciseDifficultyLabel,
+  getExerciseFilterOptions,
+  getExercises,
+  getSavedExerciseIds,
+  toggleSavedExercise,
+  type ExerciseFilterOptions
+} from "@/services/exercises.service";
 import type { PublicExerciseMetadata } from "@/types";
 
 const pricingHref = "/patient/pricing";
@@ -108,7 +118,7 @@ const comboOptions = [
 const tabOptions = [
   { label: "Tất cả bài tập", value: "all", disabled: false },
   { label: "Mới nhất", value: "latest", disabled: false },
-  { label: "Yêu thích", value: "favorites", disabled: true },
+  { label: "Yêu thích", value: "favorites", disabled: false },
   { label: "Đã xem gần đây", value: "recent", disabled: true }
 ] as const;
 
@@ -244,10 +254,15 @@ function LoadingSkeleton() {
 }
 
 function ExercisesContent() {
+  const router = useRouter();
+  const { profile } = useAuth();
+  const { pushToast } = useToast();
   const { isAuthenticated, planName } = useSubscriptionAccess();
   const [filters, setFilters] = useState<LibraryFilters>(initialFilters);
   const [filterOptions, setFilterOptions] = useState<ExerciseFilterOptions>(emptyFilterOptions);
   const [exercises, setExercises] = useState<PublicExerciseMetadata[]>([]);
+  const [savedExerciseIds, setSavedExerciseIds] = useState<Set<string>>(new Set());
+  const [pendingSavedIds, setPendingSavedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>("all");
@@ -273,6 +288,31 @@ function ExercisesContent() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    if (!isAuthenticated) {
+      setSavedExerciseIds(new Set());
+      return () => {
+        active = false;
+      };
+    }
+
+    void getSavedExerciseIds()
+      .then((ids) => {
+        if (active) setSavedExerciseIds(ids);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSavedExerciseIds(new Set());
+        pushToast("Không thể tải bài tập đã lưu", "Vui lòng thử lại sau.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, pushToast]);
+
   const bodyOptions = useMemo(() => {
     const defaults = ["Tay vai", "Cổ tay", "Bàn tay", "Chân", "Gối", "Lưng", "Toàn thân"];
     return Array.from(new Set([...filterOptions.bodyRegions, ...defaults].filter(Boolean))).sort((a, b) => a.localeCompare(b, "vi"));
@@ -288,6 +328,7 @@ function ExercisesContent() {
       const difficulty = getExerciseDifficultyLabel(exercise.difficulty);
       const text = exerciseText(exercise);
 
+      if (activeTab === "favorites" && !savedExerciseIds.has(exercise.id)) return false;
       if (search && !text.includes(search)) return false;
       if (filters.difficulty && difficulty !== filters.difficulty) return false;
       if (filters.bodyRegion && normalize(exercise.body_region) !== normalize(filters.bodyRegion)) return false;
@@ -297,7 +338,7 @@ function ExercisesContent() {
     });
 
     return sortExercises(filtered, sortBy);
-  }, [exercises, filters, sortBy]);
+  }, [activeTab, exercises, filters, savedExerciseIds, sortBy]);
 
   function updateFilters(next: Partial<LibraryFilters>) {
     setFilters((current) => ({ ...current, ...next }));
@@ -329,6 +370,56 @@ function ExercisesContent() {
     const difficulty = getExerciseDifficultyLabel(exercise.difficulty);
     const requiredPlan = requiredPlanByDifficulty[difficulty] || "Basic";
     return !hasPlanAccess(planName, requiredPlan);
+  }
+
+  async function handleToggleSaved(exerciseId: string) {
+    if (!isAuthenticated) {
+      pushToast("Vui lòng đăng nhập", "Đăng nhập bằng tài khoản Patient để lưu bài tập.");
+      router.push("/login");
+      return;
+    }
+
+    if (profile?.account_type && profile.account_type !== "patient") {
+      pushToast("Không thể lưu bài tập", "Tính năng này chỉ dành cho tài khoản Patient.");
+      return;
+    }
+
+    const wasSaved = savedExerciseIds.has(exerciseId);
+    setPendingSavedIds((current) => new Set(current).add(exerciseId));
+    setSavedExerciseIds((current) => {
+      const next = new Set(current);
+      if (wasSaved) next.delete(exerciseId);
+      else next.add(exerciseId);
+      return next;
+    });
+
+    try {
+      const nextSaved = await toggleSavedExercise(exerciseId);
+      setSavedExerciseIds((current) => {
+        const next = new Set(current);
+        if (nextSaved) next.add(exerciseId);
+        else next.delete(exerciseId);
+        return next;
+      });
+      pushToast(nextSaved ? "Đã lưu bài tập" : "Đã bỏ lưu bài tập");
+    } catch (saveError) {
+      setSavedExerciseIds((current) => {
+        const next = new Set(current);
+        if (wasSaved) next.add(exerciseId);
+        else next.delete(exerciseId);
+        return next;
+      });
+      pushToast(
+        "Không thể cập nhật bài tập đã lưu",
+        saveError instanceof Error ? saveError.message : "Vui lòng thử lại sau."
+      );
+    } finally {
+      setPendingSavedIds((current) => {
+        const next = new Set(current);
+        next.delete(exerciseId);
+        return next;
+      });
+    }
   }
 
   return (
@@ -562,6 +653,9 @@ function ExercisesContent() {
                       exercise={exercise}
                       isAuthenticated={isAuthenticated}
                       isLocked={isExerciseLocked(exercise)}
+                      isSaved={savedExerciseIds.has(exercise.id)}
+                      isSavePending={pendingSavedIds.has(exercise.id)}
+                      onToggleSaved={handleToggleSaved}
                     />
                   ))}
                 </div>
@@ -572,9 +666,13 @@ function ExercisesContent() {
                   <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white text-emerald-600 shadow-sm">
                     <Search className="h-6 w-6" />
                   </div>
-                  <h2 className="mt-4 text-xl font-black text-slate-950">Không tìm thấy bài tập phù hợp</h2>
+                  <h2 className="mt-4 text-xl font-black text-slate-950">
+                    {activeTab === "favorites" ? "Chưa có bài tập đã lưu" : "Không tìm thấy bài tập phù hợp"}
+                  </h2>
                   <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-                    Thử đổi bộ lọc hoặc tìm theo vùng cơ thể khác.
+                    {activeTab === "favorites"
+                      ? "Nhấn biểu tượng trái tim trên bài tập để lưu và xem lại tại đây."
+                      : "Thử đổi bộ lọc hoặc tìm theo vùng cơ thể khác."}
                   </p>
                   <button
                     type="button"

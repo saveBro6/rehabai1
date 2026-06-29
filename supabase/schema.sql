@@ -343,6 +343,14 @@ create table if not exists public.exercise_logs (
   created_at timestamptz default now()
 );
 
+create table if not exists public.patient_saved_exercises (
+  id uuid primary key default gen_random_uuid(),
+  patient_id uuid not null references public.patients(id) on delete cascade,
+  exercise_id uuid not null references public.exercises(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  constraint patient_saved_exercises_patient_exercise_key unique (patient_id, exercise_id)
+);
+
 create index if not exists idx_doctors_specialty on public.doctors (specialty);
 create index if not exists idx_doctors_public_visibility on public.doctors (public_profile_status, id) where deleted_at is null;
 create index if not exists idx_appointments_patient on public.appointments (patient_id);
@@ -378,6 +386,8 @@ create index if not exists idx_exercises_difficulty on public.exercises (difficu
 create index if not exists idx_exercises_body_region on public.exercises (body_region);
 create index if not exists idx_recovery_plans_user on public.recovery_plans (user_id);
 create index if not exists idx_exercise_logs_user_completed on public.exercise_logs (user_id, completed_at desc);
+create index if not exists idx_patient_saved_exercises_patient_created on public.patient_saved_exercises (patient_id, created_at desc);
+create index if not exists idx_patient_saved_exercises_exercise on public.patient_saved_exercises (exercise_id);
 create index if not exists idx_doctor_reviews_doctor_created on public.doctor_reviews (doctor_id, created_at desc);
 create index if not exists idx_doctor_reviews_patient_created on public.doctor_reviews (patient_id, created_at desc);
 create unique index if not exists user_subscriptions_one_active_per_user_idx
@@ -469,6 +479,7 @@ alter table public.exercises enable row level security;
 alter table public.recovery_plans enable row level security;
 alter table public.recovery_plan_exercises enable row level security;
 alter table public.exercise_logs enable row level security;
+alter table public.patient_saved_exercises enable row level security;
 
 revoke all privileges on table public.accounts from public, anon, authenticated;
 revoke all privileges on table public.patients from public, anon, authenticated;
@@ -496,6 +507,7 @@ revoke all privileges on table public.exercise_public_metadata from public, anon
 revoke all privileges on table public.recovery_plans from public, anon, authenticated;
 revoke all privileges on table public.recovery_plan_exercises from public, anon, authenticated;
 revoke all privileges on table public.exercise_logs from public, anon, authenticated;
+revoke all privileges on table public.patient_saved_exercises from public, anon, authenticated;
 grant select, insert, update on public.accounts to authenticated;
 grant select, insert, update on public.patients to authenticated;
 grant select on public.doctors, public.products, public.product_categories, public.subscriptions to authenticated;
@@ -546,6 +558,7 @@ grant update (full_name, phone, date_of_birth, address, medical_condition, gende
 grant update (must_change_password) on public.accounts to authenticated;
 grant select, insert, update, delete on public.doctor_schedule_slots to authenticated;
 grant select, insert, update, delete on public.doctor_notes to authenticated;
+grant select, insert, delete on public.patient_saved_exercises to authenticated;
 grant select on public.notifications to authenticated;
 grant update (is_read) on public.notifications to authenticated;
 grant update (full_name, specialty, avatar_url, bio, experience_years, consultation_fee, available_online) on public.doctors to authenticated;
@@ -895,6 +908,60 @@ on public.exercises
 for select
 to anon, authenticated
 using (is_active is true);
+
+drop policy if exists "Patients can read own saved exercises" on public.patient_saved_exercises;
+create policy "Patients can read own saved exercises"
+on public.patient_saved_exercises
+for select
+to authenticated
+using (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Patients can save own active exercises" on public.patient_saved_exercises;
+create policy "Patients can save own active exercises"
+on public.patient_saved_exercises
+for insert
+to authenticated
+with check (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+  and exists (
+    select 1
+    from public.exercises
+    where exercises.id = patient_saved_exercises.exercise_id
+      and exercises.is_active is true
+  )
+);
+
+drop policy if exists "Patients can delete own saved exercises" on public.patient_saved_exercises;
+create policy "Patients can delete own saved exercises"
+on public.patient_saved_exercises
+for delete
+to authenticated
+using (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
 
 drop policy if exists "Products are publicly readable" on public.products;
 create policy "Products are publicly readable"

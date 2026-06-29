@@ -1,4 +1,4 @@
-﻿grant select on table public.wallets to service_role;
+grant select on table public.wallets to service_role;
 grant select, insert, update on table public.wallet_topups to service_role;
 grant select, insert, update on table public.wallet_transactions to service_role;
 
