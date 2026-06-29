@@ -17,7 +17,6 @@ import type { Account, Notification } from "@/types";
 
 function getViewAllTarget(accountType: Account["account_type"]) {
   if (accountType === "patient") return { href: "/patient/notifications", label: "Xem tất cả thông báo" };
-  if (accountType === "doctor") return { href: "/doctor/notifications", label: "Xem tất cả thông báo" };
   return { href: "/admin/orders", label: "Xem quản lý đơn hàng" };
 }
 

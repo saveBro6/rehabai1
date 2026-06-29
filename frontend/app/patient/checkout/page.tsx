@@ -184,7 +184,7 @@ export default function PatientCheckoutPage() {
     if (!user || !isActivePatient) {
       pushToast(
         "Chỉ Bệnh nhân mới có thể thanh toán",
-        "Guest, Bác sĩ và Admin không phải buyer role trong MVP."
+        "Guest, Admin và tài khoản không phải Bệnh nhân không phải buyer role trong MVP."
       );
       return;
     }
@@ -256,7 +256,7 @@ export default function PatientCheckoutPage() {
                 Chỉ tài khoản Bệnh nhân active mới có thể checkout.
               </p>
               <p className="mt-2 text-sm text-amber-700">
-                Guest, Bác sĩ và Admin không phải buyer role trong MVP.
+                Guest, Admin và tài khoản không phải Bệnh nhân không phải buyer role trong MVP.
               </p>
             </Card>
           ) : null}

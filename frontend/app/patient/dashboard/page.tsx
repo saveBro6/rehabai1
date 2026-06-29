@@ -13,17 +13,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscriptionAccess } from "@/hooks/useSubscriptionAccess";
 import { getDashboardHref } from "@/config/navigation";
 import { hasPlanAccess } from "@/lib/subscription-access";
-import { getAppointments } from "@/services/appointments.service";
 import { getExercises } from "@/services/exercises.service";
 import { getProgressSummary } from "@/services/progress.service";
 import { getRecoveryPlans } from "@/services/recovery-plans.service";
-import type { Appointment, ProgressSummary, PublicExerciseMetadata, RecoveryPlan, UserSubscription } from "@/types";
+import type { ProgressSummary, PublicExerciseMetadata, RecoveryPlan, UserSubscription } from "@/types";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user, profile } = useAuth();
   const { planName, subscription: currentSubscription, isLoading: isSubscriptionLoading } = useSubscriptionAccess();
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [exercises, setExercises] = useState<PublicExerciseMetadata[]>([]);
   const [plans, setPlans] = useState<RecoveryPlan[]>([]);
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
@@ -43,13 +41,11 @@ export default function DashboardPage() {
     const canUseProgress = hasPlanAccess(planName, "Premium");
 
     void Promise.all([
-      getAppointments(user.id, profile?.account_type || "patient"),
       canUseExercises ? getExercises({ difficulty: "Cơ bản" }) : Promise.resolve([]),
       canUseRecoveryPlan ? getRecoveryPlans(user.id) : Promise.resolve([]),
       canUseProgress ? getProgressSummary(user.id) : Promise.resolve(null),
       Promise.resolve(currentSubscription)
-    ]).then(([appointmentData, exerciseData, planData, progressData, subscriptionData]) => {
-      setAppointments(appointmentData);
+    ]).then(([exerciseData, planData, progressData, subscriptionData]) => {
       setExercises(exerciseData.slice(0, 3));
       setPlans(planData);
       setProgress(progressData);
@@ -102,13 +98,7 @@ export default function DashboardPage() {
         </Card> 
       </div>
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <h2 className="text-xl font-bold">Lịch hẹn sắp tới</h2>
-          <div className="mt-4 grid gap-3">
-            {appointments.length ? appointments.map((appointment) => <div key={appointment.id} className="rounded-lg bg-slate-50 p-4 text-sm text-slate-700">{appointment.appointment_date} luc {appointment.appointment_time} · {appointment.status}</div>) : <p className="text-sm text-slate-500">Chưa có lịch hẹn. Hãy đặt lịch hẹn với bác sĩ phù hợp.</p>}
-          </div>
-        </Card>
-        <Card>
+        <Card className="lg:col-span-3">
           <h2 className="text-xl font-bold">Gói hiện tại</h2>
           <p className="mt-4 text-3xl font-bold text-emerald-700">{subscription?.subscription?.name || planName}</p>
           <p className="mt-2 text-sm text-slate-600">Trạng thái: {subscription?.status || "active"}</p>

@@ -119,5 +119,15 @@ export async function GET(request: NextRequest) {
     return redirectTo(request, "/login?oauth_error=inactive");
   }
 
+  if (account.account_type === "doctor") {
+    await supabase.auth.signOut();
+    return redirectTo(request, "/login?unsupported_role=doctor");
+  }
+
+  if (account.account_type !== "patient" && account.account_type !== "admin") {
+    await supabase.auth.signOut();
+    return redirectTo(request, "/login");
+  }
+
   return redirectTo(request, getDashboardHref(account.account_type, account.must_change_password));
 }

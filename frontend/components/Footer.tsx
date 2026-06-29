@@ -15,7 +15,6 @@ const footerGroups = [
     title: "Công ty",
     links: [
       { label: "Về chúng tôi", href: "/#about" },
-      { label: "Đội ngũ bác sĩ", href: "/patient/doctors" },
       { label: "Tin tức", href: "#" },
       { label: "Tuyển dụng", href: "#" }
     ]

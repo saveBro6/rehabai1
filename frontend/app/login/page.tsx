@@ -74,6 +74,7 @@ function LoginForm() {
   const hasSupabasePublicConfig = Boolean(getSupabaseUrl() && getSupabaseKey());
   const emailVerified = searchParams.get("verified") === "1";
   const oauthErrorMessage = getOAuthErrorMessage(searchParams.get("oauth_error"));
+  const unsupportedRole = searchParams.get("unsupported_role");
 
   async function continueWithGoogle() {
     if (!hasSupabasePublicConfig) {
@@ -144,6 +145,14 @@ function LoginForm() {
       return;
     }
 
+    if (userProfile.account_type === "doctor") {
+      setLoading(false);
+      await supabase.auth.signOut();
+      pushToast("Vai trò chưa được hỗ trợ", "Doctor UI đã được gỡ khỏi luồng MVP hiện tại.");
+      router.push("/login?unsupported_role=doctor");
+      return;
+    }
+
     if (userProfile.account_status && userProfile.account_status !== "active") {
       setLoading(false);
       await supabase.auth.signOut();
@@ -172,6 +181,12 @@ function LoginForm() {
         {oauthErrorMessage ? (
           <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
             {oauthErrorMessage}
+          </div>
+        ) : null}
+
+        {unsupportedRole === "doctor" ? (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            Doctor UI hiện không có trong luồng MVP. Vui lòng dùng tài khoản Patient hoặc Admin.
           </div>
         ) : null}
 

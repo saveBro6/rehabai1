@@ -187,7 +187,7 @@ export default function PatientOrderDetailPage({ params }: { params: { id: strin
         {!isActivePatient ? (
           <Card className="mt-6 border-amber-200 bg-amber-50">
             <p className="font-semibold text-amber-800">Chỉ tài khoản Bệnh nhân đang active mới xem chi tiết đơn hàng.</p>
-            <p className="mt-2 text-sm text-amber-700">Bác sĩ và Admin không phải buyer role trong MVP.</p>
+            <p className="mt-2 text-sm text-amber-700">Tài khoản không phải Bệnh nhân không phải buyer role trong MVP.</p>
           </Card>
         ) : null}
 

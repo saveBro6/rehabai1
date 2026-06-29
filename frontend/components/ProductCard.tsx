@@ -67,7 +67,7 @@ export function ProductCard({ product, isAuthenticated = false }: { product: Pro
     }
 
     if (!canBuy) {
-      pushToast("Chỉ Bệnh nhân mới có thể mua hàng", "Tài khoản Bác sĩ và Admin chỉ được xem sản phẩm trong MVP.");
+      pushToast("Chỉ Bệnh nhân mới có thể mua hàng", "Tài khoản không phải Bệnh nhân chỉ được xem sản phẩm trong MVP.");
       return;
     }
 

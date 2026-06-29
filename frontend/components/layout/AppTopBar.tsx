@@ -29,6 +29,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
   const title = getPageTitle(pathname);
   const accountType = profile?.account_type;
   const isActivePatient = profile?.account_type === "patient" && profile.account_status === "active";
+  const canShowNotifications = accountType === "patient" || accountType === "admin";
   const dashboardHref = isLoading ? "/patient/dashboard" : getProtectedHref(isAuthenticated, getDashboardHref(accountType, profile?.must_change_password));
   const cartPath = getCartHref(accountType);
   const cartHref = cartPath ? (isLoading ? cartPath : getProtectedHref(isAuthenticated, cartPath)) : null;
@@ -117,7 +118,6 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
     const publicNavItems = [
       { label: "Trang chủ", href: "/" },
       { label: "Bài tập", href: "/patient/exercises" },
-      { label: "Bác sĩ", href: "/patient/doctors" },
       { label: "Sản phẩm", href: "/patient/products" },
       { label: "Bảng giá", href: "/patient/pricing" },
       { label: "Về chúng tôi", href: "#about" }
@@ -133,7 +133,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             </span>
             <span className="inline-flex items-center gap-2">
               <Phone className="h-3.5 w-3.5" />
-              Tư vấn miễn phí: 1900 1234
+              Hỗ trợ miễn phí: 1900 1234
             </span>
           </div>
         </div>
@@ -305,7 +305,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
               <WalletCards className="h-5 w-5" />
             </Link>
           ) : null}
-          {!isLoading && isAuthenticated && profile?.account_status === "active" && accountType ? (
+          {!isLoading && isAuthenticated && profile?.account_status === "active" && accountType && canShowNotifications ? (
             <NotificationBell accountType={accountType} />
           ) : null}
           <Link href={profileHref} aria-label="Hồ sơ" className="rounded-lg p-2 text-slate-700 outline-none transition hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500">

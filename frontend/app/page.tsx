@@ -14,15 +14,11 @@ import {
   HeartHandshake,
   HeartPulse,
   LineChart,
-  MapPin,
-  MessageCircle,
   PlayCircle,
   RotateCcw,
   Route,
   Search,
   ShieldCheck,
-  Star,
-  Stethoscope,
   Target,
   UserRoundCheck,
 } from "lucide-react";
@@ -30,15 +26,13 @@ import {
 import { PublicProductSearch } from "@/components/public/PublicProductSearch";
 import { ProductCard } from "@/components/ProductCard";
 import { getProtectedHref } from "@/lib/auth-navigation";
-import { getDoctorRatingLabel } from "@/lib/doctor-reviews";
 import { visiblePricingPlans } from "@/lib/subscription-access";
 import { clsx, formatCurrency, getImageUrl } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { getDoctors } from "@/services/doctors.service";
 import { getExercises } from "@/services/exercises.service";
 import { getProducts } from "@/services/products.service";
 import { getSubscriptions } from "@/services/subscriptions.service";
-import type { Doctor, Product, PublicExerciseMetadata, Subscription } from "@/types";
+import type { Product, PublicExerciseMetadata, Subscription } from "@/types";
 
 const benefitCards = [
   {
@@ -49,7 +43,7 @@ const benefitCards = [
   {
     icon: Dumbbell,
     title: "Bài tập khoa học",
-    text: "Bài tập được xây dựng bởi bác sĩ và chuyên gia vật lý trị liệu."
+    text: "Bài tập được sắp xếp theo mục tiêu phục hồi và mức độ phù hợp."
   },
   {
     icon: LineChart,
@@ -58,8 +52,8 @@ const benefitCards = [
   },
   {
     icon: HeartHandshake,
-    title: "Hỗ trợ chuyên gia",
-    text: "Dễ dàng đặt lịch tư vấn khi cần trao đổi sâu hơn về tình trạng."
+    title: "Hỗ trợ rõ ràng",
+    text: "Luồng hướng dẫn, gói phục hồi và tài liệu tập luyện được trình bày dễ hiểu."
   },
   {
     icon: CalendarCheck,
@@ -103,8 +97,8 @@ const aboutValues = [
 
 const faq = [
   {
-    question: "RehabAI có thay thế bác sĩ không?",
-    answer: "Không. RehabAI hỗ trợ tập luyện, theo dõi và kết nối chuyên gia; quyết định điều trị vẫn cần bác sĩ."
+    question: "RehabAI có thay thế điều trị y tế không?",
+    answer: "Không. RehabAI hỗ trợ tập luyện và theo dõi phục hồi tại nhà; quyết định điều trị vẫn cần cơ sở y tế phù hợp."
   },
   {
     question: "Tôi có thể xem bài tập miễn phí không?",
@@ -140,7 +134,7 @@ const pricingFallback = [
     name: "Premium",
     price: 599000,
     description: "Đồng hành chuyên sâu 1:1",
-    features: ["Tất cả trong Standard", "Tư vấn 1:1 không giới hạn", "Ưu tiên hỗ trợ 24/7"]
+    features: ["Tất cả trong Standard", "Theo dõi phục hồi nâng cao", "Ưu tiên hỗ trợ 24/7"]
   }
 ] satisfies Array<Pick<Subscription, "id" | "name" | "price" | "description" | "features">>;
 
@@ -160,14 +154,12 @@ function formatDuration(exercise: PublicExerciseMetadata) {
 
 export default function LandingPage() {
   const { isAuthenticated } = useAuth();
-  const [featuredDoctors, setFeaturedDoctors] = useState<Doctor[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [featuredExercises, setFeaturedExercises] = useState<PublicExerciseMetadata[]>([]);
   const [subscriptionPlans, setSubscriptionPlans] = useState<Subscription[]>([]);
   const [loadingHighlights, setLoadingHighlights] = useState(true);
 
   const pricingHref = getProtectedHref(isAuthenticated, "/patient/pricing");
-  const appointmentHref = getProtectedHref(isAuthenticated, "/patient/appointments");
   const pricingPlans = visiblePricingPlans(subscriptionPlans);
   const displayPlans = pricingPlans.length ? pricingPlans : pricingFallback;
   const teaserPlans = ["Basic", "Standard", "Premium"].map((name) => getPlanByName(displayPlans as Subscription[], name)).filter(Boolean) as Subscription[];
@@ -175,7 +167,7 @@ export default function LandingPage() {
   const heroStats = useMemo(
     () => [
       { label: "Lộ trình cá nhân hóa", icon: ShieldCheck },
-      { label: "Bác sĩ đồng hành", icon: Stethoscope },
+      { label: "Bài tập có định hướng", icon: Dumbbell },
       { label: "An toàn & bảo mật", icon: UserRoundCheck }
     ],
     []
@@ -188,8 +180,7 @@ export default function LandingPage() {
       setLoadingHighlights(true);
 
       try {
-        const [doctors, exercises, subscriptions, products] = await Promise.all([
-          getDoctors(),
+        const [exercises, subscriptions, products] = await Promise.all([
           getExercises({}),
           getSubscriptions(),
           getProducts()
@@ -197,14 +188,12 @@ export default function LandingPage() {
 
         if (!mounted) return;
 
-        setFeaturedDoctors(doctors.slice(0, 4));
         setFeaturedProducts(products.slice(0, 4));
         setFeaturedExercises(exercises.slice(0, 5));
         setSubscriptionPlans(subscriptions);
       } catch {
         if (!mounted) return;
 
-        setFeaturedDoctors([]);
         setFeaturedProducts([]);
         setFeaturedExercises([]);
         setSubscriptionPlans([]);
@@ -232,7 +221,7 @@ export default function LandingPage() {
               <span className="block">Tại nhà. Hiệu quả hơn.</span>
             </h1>
             <p className="mt-5 w-full max-w-[320px] text-base leading-8 text-slate-600 min-[400px]:max-w-[360px] sm:max-w-2xl sm:text-lg">
-              RehabAI kết hợp lộ trình cá nhân hóa, bài tập phục hồi, bác sĩ đồng hành và theo dõi tiến trình để bạn luyện tập an toàn mỗi ngày.
+              RehabAI kết hợp lộ trình cá nhân hóa, bài tập phục hồi và theo dõi tiến trình để bạn luyện tập an toàn mỗi ngày.
             </p>
 
             <div className="mt-7 w-full max-w-[320px] min-[400px]:max-w-[360px] sm:max-w-2xl">
@@ -261,13 +250,6 @@ export default function LandingPage() {
               >
                 <Dumbbell className="h-4 w-4" />
                 Khám phá bài tập
-              </Link>
-              <Link
-                href={appointmentHref}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-white px-5 py-3 text-sm font-bold text-emerald-800 transition hover:-translate-y-0.5 hover:bg-emerald-50 sm:w-auto"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Tư vấn miễn phí
               </Link>
             </div>
 
@@ -373,54 +355,6 @@ export default function LandingPage() {
               </div>
             );
           })}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-4 py-10">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-black text-slate-950">Đội ngũ bác sĩ & chuyên gia</h2>
-            <p className="mt-2 text-sm font-semibold text-slate-500">Đồng hành cùng bạn trên hành trình phục hồi.</p>
-          </div>
-          <Link href="/patient/doctors" className="inline-flex items-center gap-2 text-sm font-black text-emerald-700 transition hover:text-emerald-900">
-            Xem tất cả bác sĩ
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-
-        {loadingHighlights ? <p className="mt-8 text-slate-500">Đang tải danh sách bác sĩ...</p> : null}
-        {!loadingHighlights && !featuredDoctors.length ? <p className="mt-8 text-slate-500">Chưa có dữ liệu bác sĩ.</p> : null}
-
-        <div className="mt-7 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {featuredDoctors.map((doctor) => (
-            <article key={doctor.id} className="overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-lg shadow-slate-950/5 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-950/10">
-              <Image
-                src={getImageUrl(doctor.avatar_url)}
-                alt={doctor.full_name}
-                width={700}
-                height={480}
-                className="h-48 w-full object-cover"
-                unoptimized
-              />
-              <div className="p-4">
-                <p className="text-xs font-bold text-emerald-700">{doctor.specialty}</p>
-                <h3 className="mt-1 text-lg font-black text-slate-950">{doctor.full_name}</h3>
-                <div className="mt-3 grid gap-2 text-xs font-semibold text-slate-500">
-                  <span className="inline-flex items-center gap-2">
-                    <Stethoscope className="h-4 w-4 text-emerald-600" />
-                    {doctor.experience_years || 0} năm kinh nghiệm
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                    {getDoctorRatingLabel(doctor)}
-                  </span>
-                </div>
-                <Link href={`/patient/doctors/${doctor.id}`} className="mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-emerald-300 px-4 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-600 hover:text-white">
-                  Xem hồ sơ
-                </Link>
-              </div>
-            </article>
-          ))}
         </div>
       </section>
 
@@ -612,10 +546,10 @@ export default function LandingPage() {
           <div>
             <h2 className="text-3xl font-black text-slate-950">Về chúng tôi</h2>
             <p className="mt-4 text-base leading-8 text-slate-600">
-              RehabAI được xây dựng bởi đội ngũ bác sĩ, kỹ sư và chuyên gia phục hồi nhằm giúp người bệnh tập luyện an toàn tại nhà.
+              RehabAI được xây dựng như một nền tảng phục hồi tại nhà, giúp người dùng theo dõi lộ trình, bài tập và tiến trình an toàn hơn mỗi ngày.
             </p>
-            <Link href="/patient/doctors" className="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2 text-sm font-black text-white transition hover:bg-emerald-700">
-              Tìm hiểu về RehabAI
+            <Link href="/patient/exercises" className="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-600 px-5 py-2 text-sm font-black text-white transition hover:bg-emerald-700">
+              Khám phá bài tập
             </Link>
           </div>
           <div className="grid gap-4 md:grid-cols-3">

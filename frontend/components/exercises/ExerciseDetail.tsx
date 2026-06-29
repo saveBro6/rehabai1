@@ -110,9 +110,9 @@ function ExerciseVideoPanel({
   if (accountType === "doctor" || videoAccess?.access_level === "metadata_only") {
     return (
       <Card className="mt-6 border-slate-200 bg-slate-50">
-        <h2 className="text-lg font-bold text-slate-950">Doctor không có quyền xem video bài tập trong MVP.</h2>
+        <h2 className="text-lg font-bold text-slate-950">Tài khoản này không có quyền xem video bài tập trong MVP.</h2>
         <p className="mt-2 text-sm text-slate-600">
-          Doctor hiện chỉ xem metadata công khai của Exercise Library. Không có URL video nào được trả về cho tài khoản này.
+          Tài khoản không thuộc luồng Patient chỉ xem metadata công khai của Exercise Library. Không có URL video nào được trả về cho tài khoản này.
         </p>
       </Card>
     );

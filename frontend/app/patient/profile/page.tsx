@@ -24,9 +24,9 @@ const statusLabels: Record<UserSubscription["status"], string> = {
 };
 
 const benefitSummaries: Record<string, string> = {
-  Basic: "Thư viện bài tập cơ bản và đặt lịch tư vấn online.",
+  Basic: "Thư viện bài tập cơ bản và hỗ trợ qua email.",
   Standard: "Full video bài tập, lộ trình cá nhân hóa và theo dõi tiến trình.",
-  Premium: "Quyền Standard, ưu tiên tư vấn và báo cáo nâng cao."
+  Premium: "Quyền Standard, ưu tiên hỗ trợ và báo cáo nâng cao."
 };
 
 const genderLabels: Record<NonNullable<User["gender"]>, string> = {
