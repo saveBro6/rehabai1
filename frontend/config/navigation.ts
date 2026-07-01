@@ -8,6 +8,7 @@ import {
   Route,
   ShieldCheck,
   ShoppingBag,
+  Sparkles,
   TrendingUp,
   UserRound,
   WalletCards,
@@ -33,6 +34,7 @@ export const patientSidebarItems: SidebarItem[] = [
   { label: "Tiến trình", href: "/patient/progress", icon: TrendingUp, requiresAuth: true },
   { label: "Hồ sơ bệnh nhân", href: "/patient/profile", icon: UserRound, requiresAuth: true },
   { label: "Hồ sơ bệnh án", href: "/patient/medical-record", icon: FileText, requiresAuth: true },
+  { label: "Trợ lý AI bệnh án", href: "/patient/ai_analysis", icon: Sparkles, requiresAuth: true },
   { label: "Sản phẩm", href: "/patient/products", icon: ShoppingBag, requiresAuth: false },
   { label: "Đơn hàng", href: "/patient/orders", icon: FileText, requiresAuth: true },
   { label: "Ví của tôi", href: "/patient/wallet", icon: WalletCards, requiresAuth: true },
@@ -89,6 +91,7 @@ export const pageTitles: Record<string, string> = {
   "/patient/pricing": "Bảng giá",
   "/patient/profile": "Hồ sơ bệnh nhân",
   "/patient/medical-record": "Hồ sơ bệnh án",
+  "/patient/ai_analysis": "Trợ lý AI bệnh án",
   "/patient/cart": "Giỏ hàng",
   "/login": "Đăng nhập",
   "/patient/register": "Đăng ký"
