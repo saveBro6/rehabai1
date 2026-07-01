@@ -22,7 +22,17 @@ import {
 import { composeShippingAddress, type DeliveryAddressForm } from "@/lib/shipping-address";
 import { formatCurrency, getImageUrl } from "@/lib/utils";
 import { createOrderFromCart } from "@/services/orders.service";
-import { getMyWallet, type Wallet } from "@/services/wallet.service";
+import {
+  confirmSimulatedWalletTopup,
+  createWalletTopup,
+  getMyWallet,
+  type Wallet
+} from "@/services/wallet.service";
+
+type WalletTopupMode = "payos" | "simulated";
+
+const MIN_WALLET_TOPUP_AMOUNT = 10_000;
+const MAX_WALLET_TOPUP_AMOUNT = 10_000_000;
 
 const emptyDeliveryAddress: DeliveryAddressForm = {
   recipientName: "",
@@ -67,6 +77,9 @@ export default function PatientCheckoutPage() {
   const { pushToast } = useToast();
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddressForm>(emptyDeliveryAddress);
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [walletTopupMode, setWalletTopupMode] = useState<WalletTopupMode>("payos");
+  const [isWalletLoading, setIsWalletLoading] = useState(true);
+  const [isSimulatedTopupLoading, setIsSimulatedTopupLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const isActivePatient = profile?.account_type === "patient" && profile?.account_status === "active";
   const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
@@ -80,21 +93,31 @@ export default function PatientCheckoutPage() {
   const hasStockIssue = stockWarnings.length > 0;
   const walletBalance = Number(wallet?.balance || 0);
   const hasInsufficientWalletBalance = isActivePatient && total > 0 && walletBalance < total;
-  const isLoading = isAuthLoading || isCartLoading;
+  const missingWalletAmount = Math.max(0, Math.ceil(total - walletBalance));
+  const simulatedTopupAmount = Math.min(
+    MAX_WALLET_TOPUP_AMOUNT,
+    Math.max(MIN_WALLET_TOPUP_AMOUNT, missingWalletAmount)
+  );
+  const isLoading = isAuthLoading || isCartLoading || isWalletLoading;
 
   useEffect(() => {
     if (!isActivePatient) {
       setWallet(null);
+      setIsWalletLoading(false);
       return;
     }
 
     let active = true;
+    setIsWalletLoading(true);
     void getMyWallet()
       .then((walletRow) => {
         if (active) setWallet(walletRow);
       })
       .catch(() => {
         if (active) setWallet(null);
+      })
+      .finally(() => {
+        if (active) setIsWalletLoading(false);
       });
 
     return () => {
@@ -124,13 +147,44 @@ export default function PatientCheckoutPage() {
     return true;
   }
 
+  async function handleSimulatedWalletTopup() {
+    if (!user || !isActivePatient) {
+      pushToast("Không thể nạp ví", "Chỉ tài khoản Bệnh nhân đang hoạt động mới có thể nạp ví.");
+      return;
+    }
+
+    if (!hasInsufficientWalletBalance || missingWalletAmount <= 0) {
+      pushToast("Số dư đã đủ", "Số dư ví hiện tại đã đủ để thanh toán đơn hàng.");
+      return;
+    }
+
+    setIsSimulatedTopupLoading(true);
+    try {
+      const topup = await createWalletTopup(simulatedTopupAmount);
+      const result = await confirmSimulatedWalletTopup(topup.id);
+      await refresh();
+      setWallet(result.wallet || (await getMyWallet()));
+      pushToast(
+        "Nạp giả lập thành công.",
+        `Đã cộng ${formatCurrency(simulatedTopupAmount)} vào ví RehabAI. Bạn vẫn cần xác nhận thanh toán đơn hàng bằng ví.`
+      );
+    } catch (error) {
+      pushToast(
+        "Không thể nạp giả lập",
+        error instanceof Error ? error.message : "Vui lòng thử lại sau. Số dư ví chưa được thay đổi."
+      );
+    } finally {
+      setIsSimulatedTopupLoading(false);
+    }
+  }
+
   async function confirmMockCheckout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!user || !isActivePatient) {
       pushToast(
         "Chỉ Bệnh nhân mới có thể thanh toán",
-        "Guest, Bác sĩ và Admin không phải buyer role trong MVP."
+        "Guest, Admin và tài khoản không phải Bệnh nhân không phải buyer role trong MVP."
       );
       return;
     }
@@ -202,7 +256,7 @@ export default function PatientCheckoutPage() {
                 Chỉ tài khoản Bệnh nhân active mới có thể checkout.
               </p>
               <p className="mt-2 text-sm text-amber-700">
-                Guest, Bác sĩ và Admin không phải buyer role trong MVP.
+                Guest, Admin và tài khoản không phải Bệnh nhân không phải buyer role trong MVP.
               </p>
             </Card>
           ) : null}
@@ -269,11 +323,80 @@ export default function PatientCheckoutPage() {
               <p className="mt-2 text-sm text-emerald-800">
                 Số dư hiện tại: <span className="font-bold">{formatCurrency(walletBalance)}</span>
               </p>
-              {hasInsufficientWalletBalance ? (
-                <Link href="/patient/wallet" className="mt-3 inline-flex text-sm font-bold text-emerald-700 underline">
-                  Nạp thêm {formatCurrency(total - walletBalance)} vào ví
-                </Link>
-              ) : null}
+              {isWalletLoading ? (
+                <p className="mt-3 text-sm font-medium text-emerald-700">Đang kiểm tra số dư ví...</p>
+              ) : hasInsufficientWalletBalance ? (
+                <div className="mt-4 border-t border-emerald-200 pt-4">
+                  <p className="text-sm font-semibold text-emerald-950">Chế độ nạp tiền</p>
+                  <div
+                    className="mt-2 grid grid-cols-2 rounded-lg border border-emerald-200 bg-white p-1"
+                    role="group"
+                    aria-label="Chế độ nạp tiền"
+                  >
+                    <button
+                      type="button"
+                      className={`min-h-10 rounded-md px-3 text-sm font-semibold transition ${
+                        walletTopupMode === "payos"
+                          ? "bg-emerald-600 text-white shadow-sm"
+                          : "text-emerald-800 hover:bg-emerald-50"
+                      }`}
+                      aria-pressed={walletTopupMode === "payos"}
+                      onClick={() => setWalletTopupMode("payos")}
+                      disabled={isSimulatedTopupLoading}
+                    >
+                      QR payOS
+                    </button>
+                    <button
+                      type="button"
+                      className={`min-h-10 rounded-md px-3 text-sm font-semibold transition ${
+                        walletTopupMode === "simulated"
+                          ? "bg-emerald-600 text-white shadow-sm"
+                          : "text-emerald-800 hover:bg-emerald-50"
+                      }`}
+                      aria-pressed={walletTopupMode === "simulated"}
+                      onClick={() => setWalletTopupMode("simulated")}
+                      disabled={isSimulatedTopupLoading}
+                    >
+                      Giả lập demo
+                    </button>
+                  </div>
+
+                  {walletTopupMode === "payos" ? (
+                    <Link
+                      href="/patient/wallet"
+                      className="mt-3 inline-flex text-sm font-bold text-emerald-700 underline decoration-emerald-300 underline-offset-4 hover:text-emerald-800"
+                    >
+                      Nạp thêm {formatCurrency(missingWalletAmount)} vào ví
+                    </Link>
+                  ) : (
+                    <div className="mt-3">
+                      <Button
+                        type="button"
+                        className="w-full"
+                        onClick={handleSimulatedWalletTopup}
+                        disabled={isSimulatedTopupLoading || hasStockIssue || !items.length}
+                      >
+                        {isSimulatedTopupLoading
+                          ? "Đang nạp giả lập..."
+                          : `Nạp giả lập ${formatCurrency(simulatedTopupAmount)} vào ví`}
+                      </Button>
+                      <p className="mt-2 text-xs leading-5 text-emerald-800">
+                        Chế độ giả lập chỉ dùng để demo/local testing, không phải giao dịch ngân hàng thật.
+                      </p>
+                      {simulatedTopupAmount !== missingWalletAmount ? (
+                        <p className="mt-1 text-xs leading-5 text-emerald-800">
+                          Mỗi lần nạp giả lập từ {formatCurrency(MIN_WALLET_TOPUP_AMOUNT)} đến{" "}
+                          {formatCurrency(MAX_WALLET_TOPUP_AMOUNT)}; phần dư vẫn được giữ trong ví.
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-3 rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-800">
+                  Số dư đủ để thanh toán đơn hàng.
+                </p>
+              )}
             </div>
 
             <div className="mt-6">

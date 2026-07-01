@@ -377,7 +377,7 @@ export default function PatientWalletPage() {
       const cancelledTopup = await cancelWalletTopup(pendingTopup.id);
       setPendingTopup(cancelledTopup);
       setTopups((current) => current.map((topup) => (topup.id === cancelledTopup.id ? cancelledTopup : topup)));
-      pushToast("Đã hủy giao dịch nạp ví.", "Bạn có thể tạo một giao dịch mới khi cần.");
+      pushToast("Đã hủy yêu cầu nạp ví.", "Bạn có thể tạo một giao dịch mới khi cần.");
     } catch (error) {
       pushToast("Không thể hủy giao dịch", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
       await refreshWalletData({ trackedTopupId: pendingTopup.id });

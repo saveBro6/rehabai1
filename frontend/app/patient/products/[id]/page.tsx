@@ -138,7 +138,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
     }
 
     if (!canBuy) {
-      pushToast("Chỉ Bệnh nhân mới có thể mua hàng", "Tài khoản Bác sĩ và Admin chỉ được xem sản phẩm trong MVP.");
+      pushToast("Chỉ Bệnh nhân mới có thể mua hàng", "Tài khoản không phải Bệnh nhân chỉ được xem sản phẩm trong MVP.");
       return;
     }
 
@@ -258,7 +258,7 @@ export default function ProductDetailPage({ params }: { params: { id: string } }
             </p>
           ) : isKnownNonBuyer ? (
             <p className="mt-6 rounded-lg bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">
-              Tài khoản Bác sĩ/Admin chỉ được xem sản phẩm và không thể mua hàng trong MVP.
+              Tài khoản không phải Bệnh nhân chỉ được xem sản phẩm và không thể mua hàng trong MVP.
             </p>
           ) : (
             <div className="mt-6 grid gap-3 sm:grid-cols-2">

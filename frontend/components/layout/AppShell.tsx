@@ -10,13 +10,11 @@ import { AppTopBar } from "@/components/layout/AppTopBar";
 import { DynamicSidebar } from "@/components/layout/DynamicSidebar";
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
-  const pathname = usePathname();
 
-  const isDoctorDashboard = pathname === "/doctor" || pathname.startsWith("/doctor/");
-
-  if (isDoctorDashboard) {
+  if (pathname === "/login") {
     return <>{children}</>;
   }
 

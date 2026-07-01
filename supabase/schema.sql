@@ -144,6 +144,9 @@ create table if not exists public.notifications (
   content text not null,
   type text not null default 'system',
   is_read boolean not null default false,
+  related_entity_type text,
+  related_entity_id uuid,
+  action_url text,
   created_at timestamptz not null default now()
 );
 
@@ -340,6 +343,14 @@ create table if not exists public.exercise_logs (
   created_at timestamptz default now()
 );
 
+create table if not exists public.patient_saved_exercises (
+  id uuid primary key default gen_random_uuid(),
+  patient_id uuid not null references public.patients(id) on delete cascade,
+  exercise_id uuid not null references public.exercises(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  constraint patient_saved_exercises_patient_exercise_key unique (patient_id, exercise_id)
+);
+
 create index if not exists idx_doctors_specialty on public.doctors (specialty);
 create index if not exists idx_doctors_public_visibility on public.doctors (public_profile_status, id) where deleted_at is null;
 create index if not exists idx_appointments_patient on public.appointments (patient_id);
@@ -351,6 +362,9 @@ create index if not exists idx_appointment_home_visits_patient on public.appoint
 create index if not exists idx_doctor_schedule_slots_doctor_date on public.doctor_schedule_slots (doctor_id, slot_date, start_time);
 create index if not exists idx_doctor_notes_doctor_created on public.doctor_notes (doctor_id, created_at desc);
 create index if not exists idx_notifications_account_created on public.notifications (account_id, created_at desc);
+create index if not exists idx_notifications_account_unread_created
+on public.notifications (account_id, created_at desc)
+where is_read = false;
 create index if not exists idx_products_category on public.products (category);
 create index if not exists idx_products_public_visibility on public.products (is_active, deleted_at, created_at desc);
 create unique index if not exists product_categories_name_unique_active
@@ -372,6 +386,8 @@ create index if not exists idx_exercises_difficulty on public.exercises (difficu
 create index if not exists idx_exercises_body_region on public.exercises (body_region);
 create index if not exists idx_recovery_plans_user on public.recovery_plans (user_id);
 create index if not exists idx_exercise_logs_user_completed on public.exercise_logs (user_id, completed_at desc);
+create index if not exists idx_patient_saved_exercises_patient_created on public.patient_saved_exercises (patient_id, created_at desc);
+create index if not exists idx_patient_saved_exercises_exercise on public.patient_saved_exercises (exercise_id);
 create index if not exists idx_doctor_reviews_doctor_created on public.doctor_reviews (doctor_id, created_at desc);
 create index if not exists idx_doctor_reviews_patient_created on public.doctor_reviews (patient_id, created_at desc);
 create unique index if not exists user_subscriptions_one_active_per_user_idx
@@ -463,6 +479,7 @@ alter table public.exercises enable row level security;
 alter table public.recovery_plans enable row level security;
 alter table public.recovery_plan_exercises enable row level security;
 alter table public.exercise_logs enable row level security;
+alter table public.patient_saved_exercises enable row level security;
 
 revoke all privileges on table public.accounts from public, anon, authenticated;
 revoke all privileges on table public.patients from public, anon, authenticated;
@@ -490,6 +507,7 @@ revoke all privileges on table public.exercise_public_metadata from public, anon
 revoke all privileges on table public.recovery_plans from public, anon, authenticated;
 revoke all privileges on table public.recovery_plan_exercises from public, anon, authenticated;
 revoke all privileges on table public.exercise_logs from public, anon, authenticated;
+revoke all privileges on table public.patient_saved_exercises from public, anon, authenticated;
 grant select, insert, update on public.accounts to authenticated;
 grant select, insert, update on public.patients to authenticated;
 grant select on public.doctors, public.products, public.product_categories, public.subscriptions to authenticated;
@@ -540,7 +558,9 @@ grant update (full_name, phone, date_of_birth, address, medical_condition, gende
 grant update (must_change_password) on public.accounts to authenticated;
 grant select, insert, update, delete on public.doctor_schedule_slots to authenticated;
 grant select, insert, update, delete on public.doctor_notes to authenticated;
-grant select, update on public.notifications to authenticated;
+grant select, insert, delete on public.patient_saved_exercises to authenticated;
+grant select on public.notifications to authenticated;
+grant update (is_read) on public.notifications to authenticated;
 grant update (full_name, specialty, avatar_url, bio, experience_years, consultation_fee, available_online) on public.doctors to authenticated;
 grant select (
   id,
@@ -888,6 +908,60 @@ on public.exercises
 for select
 to anon, authenticated
 using (is_active is true);
+
+drop policy if exists "Patients can read own saved exercises" on public.patient_saved_exercises;
+create policy "Patients can read own saved exercises"
+on public.patient_saved_exercises
+for select
+to authenticated
+using (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Patients can save own active exercises" on public.patient_saved_exercises;
+create policy "Patients can save own active exercises"
+on public.patient_saved_exercises
+for insert
+to authenticated
+with check (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+  and exists (
+    select 1
+    from public.exercises
+    where exercises.id = patient_saved_exercises.exercise_id
+      and exercises.is_active is true
+  )
+);
+
+drop policy if exists "Patients can delete own saved exercises" on public.patient_saved_exercises;
+create policy "Patients can delete own saved exercises"
+on public.patient_saved_exercises
+for delete
+to authenticated
+using (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
 
 drop policy if exists "Products are publicly readable" on public.products;
 create policy "Products are publicly readable"
@@ -3434,6 +3508,35 @@ begin
 end;
 $$;
 
+create or replace function public.expire_stale_patient_subscriptions(target_patient_id uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expired_count integer := 0;
+begin
+  if target_patient_id is null then
+    return 0;
+  end if;
+
+  update public.user_subscriptions
+  set status = 'expired',
+      expires_at = coalesce(expires_at, now()),
+      updated_at = now()
+  where user_id = target_patient_id
+    and status = 'active'
+    and (
+      end_date < current_date
+      or (expires_at is not null and expires_at < now())
+    );
+
+  get diagnostics v_expired_count = row_count;
+  return v_expired_count;
+end;
+$$;
+
 create or replace function public.get_current_patient_subscription()
 returns table (
   id uuid,
@@ -3475,6 +3578,8 @@ begin
     raise exception 'Only active Patient accounts can read current subscription.';
   end if;
 
+  perform public.expire_stale_patient_subscriptions(v_patient_id);
+
   return query
   select
     user_subscriptions.id,
@@ -3483,7 +3588,11 @@ begin
     user_subscriptions.start_date,
     user_subscriptions.end_date,
     case
-      when user_subscriptions.status = 'active' and user_subscriptions.end_date < current_date then 'expired'
+      when user_subscriptions.status = 'active'
+        and (
+          user_subscriptions.end_date < current_date
+          or (user_subscriptions.expires_at is not null and user_subscriptions.expires_at < now())
+        ) then 'expired'
       else user_subscriptions.status
     end as status,
     user_subscriptions.amount,
@@ -3502,7 +3611,10 @@ begin
   where user_subscriptions.user_id = v_patient_id
   order by
     case
-      when user_subscriptions.status = 'active' and user_subscriptions.end_date >= current_date then 0
+      when user_subscriptions.status = 'active'
+        and user_subscriptions.start_date <= current_date
+        and user_subscriptions.end_date >= current_date
+        and (user_subscriptions.expires_at is null or user_subscriptions.expires_at >= now()) then 0
       when user_subscriptions.status = 'active' then 1
       when user_subscriptions.status = 'pending_payment' then 2
       else 3
@@ -3777,6 +3889,10 @@ grant execute on function public.confirm_subscription_mock_payment(uuid) to auth
 revoke execute on function public.create_subscription_checkout(text) from public;
 revoke execute on function public.create_subscription_checkout(text) from anon;
 grant execute on function public.create_subscription_checkout(text) to authenticated;
+
+revoke execute on function public.expire_stale_patient_subscriptions(uuid) from public;
+revoke execute on function public.expire_stale_patient_subscriptions(uuid) from anon;
+revoke execute on function public.expire_stale_patient_subscriptions(uuid) from authenticated;
 
 revoke execute on function public.get_current_patient_subscription() from public;
 revoke execute on function public.get_current_patient_subscription() from anon;
@@ -4589,12 +4705,345 @@ to authenticated
 using (public.is_active_admin_account((select auth.uid())));
 
 drop policy if exists "Accounts can manage own notifications" on public.notifications;
-create policy "Accounts can manage own notifications"
+drop policy if exists "Active accounts can read own notifications" on public.notifications;
+create policy "Active accounts can read own notifications"
 on public.notifications
-for all
+for select
 to authenticated
-using (account_id = (select auth.uid()))
-with check (account_id = (select auth.uid()));
+using (
+  account_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Active accounts can mark own notifications read" on public.notifications;
+create policy "Active accounts can mark own notifications read"
+on public.notifications
+for update
+to authenticated
+using (
+  account_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_status = 'active'
+  )
+)
+with check (
+  account_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_status = 'active'
+  )
+);
+
+create or replace function public.create_role_notification(
+  target_account_id uuid,
+  expected_account_type text,
+  notification_type text,
+  notification_title text,
+  notification_content text,
+  entity_type text,
+  entity_id uuid,
+  destination_url text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if target_account_id is null then
+    return;
+  end if;
+
+  insert into public.notifications (
+    account_id,
+    title,
+    content,
+    type,
+    related_entity_type,
+    related_entity_id,
+    action_url
+  )
+  select
+    accounts.id,
+    notification_title,
+    notification_content,
+    notification_type,
+    entity_type,
+    entity_id,
+    destination_url
+  from public.accounts
+  where accounts.id = target_account_id
+    and accounts.account_type = expected_account_type
+    and accounts.account_status = 'active';
+end;
+$$;
+
+create or replace function public.notify_order_events()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor_id uuid := auth.uid();
+  v_actor_type text;
+begin
+  select accounts.account_type
+    into v_actor_type
+  from public.accounts
+  where accounts.id = v_actor_id
+    and accounts.account_status = 'active';
+
+  if tg_op = 'INSERT' then
+    if v_actor_type = 'patient'
+      and new.user_id = v_actor_id
+      and new.status = 'pending' then
+      insert into public.notifications (
+        account_id,
+        title,
+        content,
+        type,
+        related_entity_type,
+        related_entity_id,
+        action_url
+      )
+      select
+        accounts.id,
+        'Có đơn hàng mới cần xác nhận',
+        'Một đơn hàng mới đang chờ Admin xác nhận.',
+        'order_created',
+        'order',
+        new.id,
+        '/admin/orders/' || new.id::text
+      from public.accounts
+      where accounts.account_type = 'admin'
+        and accounts.account_status = 'active';
+    end if;
+
+    return new;
+  end if;
+
+  if v_actor_type <> 'admin' or new.status is not distinct from old.status then
+    return new;
+  end if;
+
+  if old.status = 'pending' and new.status = 'confirmed' then
+    perform public.create_role_notification(
+      new.user_id,
+      'patient',
+      'order_confirmed',
+      'Đơn hàng đã được xác nhận',
+      'Admin đã tiếp nhận đơn hàng của bạn để xử lý.',
+      'order',
+      new.id,
+      '/patient/orders/' || new.id::text
+    );
+  elsif new.status = 'cancelled' then
+    perform public.create_role_notification(
+      new.user_id,
+      'patient',
+      'order_cancelled',
+      'Đơn hàng đã bị hủy',
+      'Admin đã hủy đơn hàng. Lý do: ' || coalesce(nullif(btrim(new.cancellation_reason), ''), 'Không có lý do được cung cấp.'),
+      'order',
+      new.id,
+      '/patient/orders/' || new.id::text
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.notify_shipment_events()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor_id uuid := auth.uid();
+  v_patient_id uuid;
+  v_title text;
+  v_content text;
+begin
+  if not public.is_active_admin_account(v_actor_id) then
+    return new;
+  end if;
+
+  if new.shipping_status not in ('preparing', 'shipped')
+    or (tg_op = 'UPDATE' and new.shipping_status is not distinct from old.shipping_status) then
+    return new;
+  end if;
+
+  select orders.user_id
+    into v_patient_id
+  from public.orders
+  where orders.id = new.order_id;
+
+  if new.shipping_status = 'preparing' then
+    v_title := 'Đơn hàng đang được chuẩn bị';
+    v_content := 'Admin đang chuẩn bị đơn hàng để bàn giao cho đơn vị vận chuyển.';
+  else
+    v_title := 'Đơn hàng đang được giao';
+    v_content := 'Đơn hàng đã được bàn giao cho đơn vị vận chuyển.';
+  end if;
+
+  perform public.create_role_notification(
+    v_patient_id,
+    'patient',
+    'order_status_updated',
+    v_title,
+    v_content,
+    'order',
+    new.order_id,
+    '/patient/orders/' || new.order_id::text
+  );
+
+  return new;
+end;
+$$;
+
+create or replace function public.notify_appointment_events()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_actor_id uuid := auth.uid();
+  v_actor_type text;
+begin
+  select accounts.account_type
+    into v_actor_type
+  from public.accounts
+  where accounts.id = v_actor_id
+    and accounts.account_status = 'active';
+
+  if tg_op = 'INSERT' then
+    if v_actor_type = 'patient'
+      and new.patient_id = v_actor_id
+      and new.status = 'pending' then
+      perform public.create_role_notification(
+        new.doctor_id,
+        'doctor',
+        'appointment_created',
+        'Có lịch hẹn mới',
+        'Một Bệnh nhân đã gửi yêu cầu lịch hẹn mới.',
+        'appointment',
+        new.id,
+        '/doctor/appointments/' || new.id::text
+      );
+    end if;
+
+    return new;
+  end if;
+
+  if new.status is not distinct from old.status then
+    return new;
+  end if;
+
+  if v_actor_type = 'patient'
+    and new.patient_id = v_actor_id
+    and old.status = 'pending'
+    and new.status = 'cancelled' then
+    perform public.create_role_notification(
+      new.doctor_id,
+      'doctor',
+      'appointment_cancelled_by_patient',
+      'Bệnh nhân đã hủy lịch hẹn',
+      'Bệnh nhân đã hủy lịch hẹn. Lý do: ' || coalesce(nullif(btrim(new.cancel_reason), ''), 'Không có lý do được cung cấp.'),
+      'appointment',
+      new.id,
+      '/doctor/appointments/' || new.id::text
+    );
+  elsif v_actor_type = 'doctor'
+    and new.doctor_id = v_actor_id
+    and old.status = 'pending'
+    and new.status = 'confirmed' then
+    perform public.create_role_notification(
+      new.patient_id,
+      'patient',
+      'appointment_confirmed',
+      'Lịch hẹn đã được xác nhận',
+      'Bác sĩ đã xác nhận lịch hẹn của bạn.',
+      'appointment',
+      new.id,
+      '/patient/appointments/' || new.id::text
+    );
+  elsif v_actor_type = 'doctor'
+    and new.doctor_id = v_actor_id
+    and old.status = 'pending'
+    and new.status = 'rejected' then
+    perform public.create_role_notification(
+      new.patient_id,
+      'patient',
+      'appointment_rejected',
+      'Lịch hẹn đã bị từ chối',
+      'Bác sĩ đã từ chối lịch hẹn. Lý do: ' || coalesce(nullif(btrim(new.reject_reason), ''), 'Không có lý do được cung cấp.'),
+      'appointment',
+      new.id,
+      '/patient/appointments/' || new.id::text
+    );
+  elsif v_actor_type = 'doctor'
+    and new.doctor_id = v_actor_id
+    and new.status = 'cancelled' then
+    perform public.create_role_notification(
+      new.patient_id,
+      'patient',
+      'appointment_cancelled',
+      'Lịch hẹn đã bị hủy',
+      'Bác sĩ đã hủy lịch hẹn. Lý do: ' || coalesce(nullif(btrim(new.cancel_reason), ''), 'Không có lý do được cung cấp.'),
+      'appointment',
+      new.id,
+      '/patient/appointments/' || new.id::text
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_order_events_trigger on public.orders;
+create trigger notify_order_events_trigger
+after insert or update on public.orders
+for each row execute function public.notify_order_events();
+
+drop trigger if exists notify_shipment_events_trigger on public.shipments;
+create trigger notify_shipment_events_trigger
+after insert or update on public.shipments
+for each row execute function public.notify_shipment_events();
+
+drop trigger if exists notify_appointment_events_trigger on public.appointments;
+create trigger notify_appointment_events_trigger
+after insert or update on public.appointments
+for each row execute function public.notify_appointment_events();
+
+revoke execute on function public.create_role_notification(uuid, text, text, text, text, text, uuid, text) from public;
+revoke execute on function public.create_role_notification(uuid, text, text, text, text, text, uuid, text) from anon;
+revoke execute on function public.create_role_notification(uuid, text, text, text, text, text, uuid, text) from authenticated;
+
+revoke execute on function public.notify_order_events() from public;
+revoke execute on function public.notify_order_events() from anon;
+revoke execute on function public.notify_order_events() from authenticated;
+
+revoke execute on function public.notify_shipment_events() from public;
+revoke execute on function public.notify_shipment_events() from anon;
+revoke execute on function public.notify_shipment_events() from authenticated;
+
+revoke execute on function public.notify_appointment_events() from public;
+revoke execute on function public.notify_appointment_events() from anon;
+revoke execute on function public.notify_appointment_events() from authenticated;
 
 create or replace function public.handle_new_auth_user()
 returns trigger
@@ -5005,6 +5454,10 @@ begin
     raise exception 'Wallet top-up was not found.';
   end if;
 
+  if v_topup.provider <> 'simulated' then
+    raise exception 'Only simulated wallet top-ups can be confirmed through this flow.';
+  end if;
+
   if v_topup.status = 'completed' then
     return v_topup;
   end if;
@@ -5067,6 +5520,9 @@ begin
   return v_topup;
 end;
 $$;
+
+comment on function public.confirm_simulated_wallet_topup(uuid)
+is 'Browser-callable simulated wallet top-up confirmation. Validates active Patient ownership and rejects payOS/provider top-ups before atomically crediting the wallet.';
 
 create or replace function public.pay_order_with_wallet(p_shipping_address text)
 returns table (
@@ -5338,6 +5794,8 @@ begin
     raise exception 'Only active Patient accounts can pay for subscriptions.';
   end if;
 
+  perform public.expire_stale_patient_subscriptions(v_patient_id);
+
   if v_plan_key = 'basic' then
     v_plan_name := 'Basic';
     v_plan_tier := 1;
@@ -5378,6 +5836,7 @@ begin
     and user_subscriptions.status = 'active'
     and user_subscriptions.start_date <= current_date
     and user_subscriptions.end_date >= current_date
+    and (user_subscriptions.expires_at is null or user_subscriptions.expires_at >= now())
   order by user_subscriptions.created_at desc
   limit 1;
 
@@ -5426,35 +5885,43 @@ begin
   where user_id = v_patient_id
     and status = 'active'
     and v_active_tier is not null
-    and v_plan_tier > v_active_tier;
+    and v_plan_tier > v_active_tier
+    and start_date <= current_date
+    and end_date >= current_date
+    and (expires_at is null or expires_at >= now());
 
-  insert into public.user_subscriptions (
-    user_id,
-    subscription_id,
-    start_date,
-    end_date,
-    status,
-    amount,
-    payment_method,
-    payment_reference,
-    started_at,
-    expires_at,
-    updated_at
-  )
-  values (
-    v_patient_id,
-    v_subscription_id,
-    current_date,
-    current_date + 30,
-    'active',
-    v_amount,
-    'internal_wallet',
-    'WALLET-SUB-' || to_char(now(), 'YYYYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
-    now(),
-    now() + interval '30 days',
-    now()
-  )
-  returning * into v_subscription;
+  begin
+    insert into public.user_subscriptions (
+      user_id,
+      subscription_id,
+      start_date,
+      end_date,
+      status,
+      amount,
+      payment_method,
+      payment_reference,
+      started_at,
+      expires_at,
+      updated_at
+    )
+    values (
+      v_patient_id,
+      v_subscription_id,
+      current_date,
+      current_date + 30,
+      'active',
+      v_amount,
+      'internal_wallet',
+      'WALLET-SUB-' || to_char(now(), 'YYYYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
+      now(),
+      now() + interval '30 days',
+      now()
+    )
+    returning * into v_subscription;
+  exception
+    when unique_violation then
+      raise exception 'Bạn đã có gói đang hoạt động hoặc gói cũ chưa được cập nhật trạng thái. Vui lòng tải lại trang và thử lại.';
+  end;
 
   update public.wallets
   set balance = v_balance_after,
@@ -5750,9 +6217,205 @@ revoke execute on function public.complete_provider_wallet_topup(text, bigint, n
 revoke execute on function public.complete_provider_wallet_topup(text, bigint, numeric, text, jsonb) from authenticated;
 grant execute on function public.complete_provider_wallet_topup(text, bigint, numeric, text, jsonb) to service_role;
 
+alter table public.wallets enable row level security;
+alter table public.wallet_topups enable row level security;
+alter table public.wallet_transactions enable row level security;
+
+revoke all privileges on table public.wallets from public, anon;
+revoke all privileges on table public.wallet_topups from public, anon;
+revoke all privileges on table public.wallet_transactions from public, anon;
+
+revoke insert, update, delete, truncate, references, trigger on table public.wallets from authenticated;
+revoke insert, update, delete, truncate, references, trigger on table public.wallet_topups from authenticated;
+revoke insert, update, delete, truncate, references, trigger on table public.wallet_transactions from authenticated;
+
+grant select on table public.wallets to authenticated;
+grant select on table public.wallet_topups to authenticated;
+grant select on table public.wallet_transactions to authenticated;
+
+drop policy if exists "Patients can read own wallets" on public.wallets;
+create policy "Patients can read own wallets"
+on public.wallets
+for select
+to authenticated
+using (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Admins can read wallets" on public.wallets;
+create policy "Admins can read wallets"
+on public.wallets
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'admin'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Patients can read own wallet topups" on public.wallet_topups;
+create policy "Patients can read own wallet topups"
+on public.wallet_topups
+for select
+to authenticated
+using (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Admins can read wallet topups" on public.wallet_topups;
+create policy "Admins can read wallet topups"
+on public.wallet_topups
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'admin'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Patients can read own wallet transactions" on public.wallet_transactions;
+create policy "Patients can read own wallet transactions"
+on public.wallet_transactions
+for select
+to authenticated
+using (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
+
+drop policy if exists "Admins can read wallet transactions" on public.wallet_transactions;
+create policy "Admins can read wallet transactions"
+on public.wallet_transactions
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'admin'
+      and accounts.account_status = 'active'
+  )
+);
+
+comment on table public.wallet_topups is
+  'Wallet top-up requests. Browser reads are intentionally SELECT-only for authenticated users and restricted by RLS to active Patient ownership or active Admin access.';
+
 revoke execute on function public.confirm_simulated_wallet_topup(uuid) from public;
 revoke execute on function public.confirm_simulated_wallet_topup(uuid) from anon;
 grant execute on function public.confirm_simulated_wallet_topup(uuid) to authenticated;
+
+grant select on public.wallet_topups to authenticated;
+
+drop policy if exists "Patients can read own wallet topups" on public.wallet_topups;
+create policy "Patients can read own wallet topups"
+on public.wallet_topups
+for select
+to authenticated
+using (
+  patient_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.accounts
+    where accounts.id = (select auth.uid())
+      and accounts.account_type = 'patient'
+      and accounts.account_status = 'active'
+  )
+);
+
+create or replace function public.cancel_own_pending_wallet_topup(target_topup_id uuid)
+returns public.wallet_topups
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_patient_id uuid := auth.uid();
+  v_account public.accounts%rowtype;
+  v_topup public.wallet_topups%rowtype;
+begin
+  if v_patient_id is null then
+    raise exception 'Authentication required.';
+  end if;
+
+  select *
+    into v_account
+  from public.accounts
+  where id = v_patient_id
+    and account_type = 'patient'
+    and account_status = 'active';
+
+  if v_account.id is null then
+    raise exception 'Only active Patient accounts can cancel wallet top-ups.';
+  end if;
+
+  select *
+    into v_topup
+  from public.wallet_topups
+  where id = target_topup_id
+    and patient_id = v_patient_id;
+
+  if v_topup.id is null then
+    raise exception 'Wallet top-up was not found.';
+  end if;
+
+  if v_topup.status <> 'pending' then
+    raise exception 'Only pending wallet top-ups can be cancelled.';
+  end if;
+
+  update public.wallet_topups
+  set status = 'cancelled',
+      provider_status = coalesce(provider_status, 'CANCELLED_BY_USER'),
+      cancelled_at = now(),
+      cancellation_reason = coalesce(cancellation_reason, 'Cancelled by user'),
+      updated_at = now()
+  where id = v_topup.id
+    and patient_id = v_patient_id
+    and status = 'pending'
+  returning * into v_topup;
+
+  if v_topup.id is null then
+    raise exception 'Wallet top-up status changed. Please refresh and try again.';
+  end if;
+
+  return v_topup;
+end;
+$$;
+
+comment on function public.cancel_own_pending_wallet_topup(uuid)
+is 'Browser-callable wallet top-up cancellation. Validates active Patient ownership and pending status before cancelling without touching wallet balance.';
+
+revoke execute on function public.cancel_own_pending_wallet_topup(uuid) from public;
+revoke execute on function public.cancel_own_pending_wallet_topup(uuid) from anon;
+grant execute on function public.cancel_own_pending_wallet_topup(uuid) to authenticated;
 
 revoke execute on function public.pay_order_with_wallet(text) from public;
 revoke execute on function public.pay_order_with_wallet(text) from anon;

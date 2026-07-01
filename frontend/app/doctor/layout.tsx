@@ -1,5 +1,5 @@
-import { DoctorLayout } from "@/components/doctor/DoctorLayout";
+import { redirect } from "next/navigation";
 
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return <DoctorLayout>{children}</DoctorLayout>;
+export default function Layout() {
+  redirect("/login?unsupported_role=doctor");
 }

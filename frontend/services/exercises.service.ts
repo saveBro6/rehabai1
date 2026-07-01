@@ -197,6 +197,87 @@ export async function getExerciseById(idOrSlug: string): Promise<PublicExerciseM
   return data as PublicExerciseMetadata | null;
 }
 
+async function getCurrentUserId() {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.auth.getUser();
+  assertNoSupabaseError(error);
+
+  if (!data.user) {
+    throw new Error("Vui lòng đăng nhập để lưu bài tập.");
+  }
+
+  return data.user.id;
+}
+
+export async function getSavedExerciseIds(): Promise<Set<string>> {
+  const supabase = getSupabase();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  assertNoSupabaseError(authError);
+
+  if (!authData.user) {
+    return new Set();
+  }
+
+  const { data, error } = await supabase.from("patient_saved_exercises").select("exercise_id");
+  assertNoSupabaseError(error);
+  return new Set((data || []).map((row) => row.exercise_id));
+}
+
+export async function getSavedExerciseStatus(exerciseId: string): Promise<boolean> {
+  const supabase = getSupabase();
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  assertNoSupabaseError(authError);
+
+  if (!authData.user) {
+    return false;
+  }
+
+  const { data, error } = await supabase
+    .from("patient_saved_exercises")
+    .select("id")
+    .eq("exercise_id", exerciseId)
+    .maybeSingle();
+  assertNoSupabaseError(error);
+  return Boolean(data);
+}
+
+export async function saveExercise(exerciseId: string) {
+  const supabase = getSupabase();
+  const patientId = await getCurrentUserId();
+  const { error } = await supabase
+    .from("patient_saved_exercises")
+    .upsert(
+      {
+        patient_id: patientId,
+        exercise_id: exerciseId
+      },
+      { onConflict: "patient_id,exercise_id", ignoreDuplicates: true }
+    );
+  assertNoSupabaseError(error);
+}
+
+export async function unsaveExercise(exerciseId: string) {
+  const supabase = getSupabase();
+  const patientId = await getCurrentUserId();
+  const { error } = await supabase
+    .from("patient_saved_exercises")
+    .delete()
+    .eq("patient_id", patientId)
+    .eq("exercise_id", exerciseId);
+  assertNoSupabaseError(error);
+}
+
+export async function toggleSavedExercise(exerciseId: string): Promise<boolean> {
+  const isSaved = await getSavedExerciseStatus(exerciseId);
+  if (isSaved) {
+    await unsaveExercise(exerciseId);
+    return false;
+  }
+
+  await saveExercise(exerciseId);
+  return true;
+}
+
 export async function getExerciseVideoAccess(exerciseId: string): Promise<ExerciseVideoAccess | null> {
   const supabase = getSupabase();
   const { data, error } = await supabase.rpc("get_exercise_video_access", { target_exercise_id: exerciseId });

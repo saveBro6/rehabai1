@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 
+import { getAuthRedirectUrl } from "@/lib/auth-redirects";
 import { getSupabaseClient } from "@/lib/supabase-client";
 import { ensureUserProfile, getUserProfile, type SignUpPayload } from "@/services/users.service";
 import type { User as AppUserProfile } from "@/types";
@@ -28,7 +29,11 @@ export function useAuth(): UseAuthResult {
       return;
     }
 
-    setProfile(await getUserProfile(authUser.id));
+    try {
+      setProfile(await getUserProfile(authUser.id));
+    } catch {
+      setProfile(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -82,6 +87,7 @@ export function useAuth(): UseAuthResult {
       email: payload.email,
       password: payload.password,
       options: {
+        emailRedirectTo: getAuthRedirectUrl("/login"),
         data: {
           full_name: payload.full_name,
           phone: payload.phone || ""
@@ -102,6 +108,7 @@ export function useAuth(): UseAuthResult {
     }
     setUser(null);
     setProfile(null);
+    setIsLoading(false);
   }, []);
 
   return {

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function DoctorIndexPage() {
-  redirect("/doctor/dashboard");
+  redirect("/login?unsupported_role=doctor");
 }

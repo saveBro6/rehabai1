@@ -110,6 +110,9 @@ export type Database = {
         content: string;
         type: string;
         is_read: boolean;
+        related_entity_type: string | null;
+        related_entity_id: string | null;
+        action_url: string | null;
         created_at: string;
       }>;
       products: TableDefinition<{
@@ -351,6 +354,12 @@ export type Database = {
         notes: string | null;
         created_at: string;
       }>;
+      patient_saved_exercises: TableDefinition<{
+        id: string;
+        patient_id: string;
+        exercise_id: string;
+        created_at: string;
+      }>;
     };
     Views: {
       exercise_public_metadata: TableDefinition<{
@@ -503,6 +512,10 @@ export type Database = {
         Returns: Database["public"]["Tables"]["wallet_topups"]["Row"];
       };
       confirm_simulated_wallet_topup: {
+        Args: { target_topup_id: string };
+        Returns: Database["public"]["Tables"]["wallet_topups"]["Row"];
+      };
+      cancel_own_pending_wallet_topup: {
         Args: { target_topup_id: string };
         Returns: Database["public"]["Tables"]["wallet_topups"]["Row"];
       };

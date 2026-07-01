@@ -31,7 +31,7 @@ const comparison = [
   ["Video bài tập đầy đủ", "Khóa", "Có", "Có"],
   ["Lộ trình cá nhân hóa", "-", "Có", "Có + gợi ý điều chỉnh"],
   ["Theo dõi tiến trình", "-", "Có", "Báo cáo nâng cao"],
-  ["Tư vấn online", "Đặt lịch", "Đặt lịch", "Ưu tiên chuyên gia"]
+  ["Hỗ trợ phục hồi", "Email", "Ưu tiên", "Ưu tiên nâng cao"]
 ];
 
 function getPlanTier(planName?: string | null) {
