@@ -40,6 +40,55 @@ function formatDate(value?: string | null, fallback = "Chưa có") {
   return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(value));
 }
 
+function getDateOnly(value?: string | null) {
+  if (!value) return null;
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function isDateOnOrBeforeToday(value?: string | null) {
+  const date = getDateOnly(value);
+  if (!date) return true;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date.getTime() <= today.getTime();
+}
+
+function isDateOnOrAfterToday(value?: string | null) {
+  const date = getDateOnly(value);
+  if (!date) return true;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date.getTime() >= today.getTime();
+}
+
+function isTimestampNowOrFuture(value?: string | null) {
+  if (!value) return true;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && time >= Date.now();
+}
+
+function hasCurrentAccess(subscription: UserSubscription | null) {
+  if (!subscription) return false;
+
+  return (
+    isDateOnOrBeforeToday(subscription.start_date) &&
+    isDateOnOrAfterToday(subscription.end_date) &&
+    isTimestampNowOrFuture(subscription.expires_at)
+  );
+}
+
+function isCurrentActiveSubscription(subscription: UserSubscription | null) {
+  return Boolean(subscription?.status === "active" && hasCurrentAccess(subscription));
+}
+
+function isCancelledAtPeriodEnd(subscription: UserSubscription | null) {
+  return Boolean(subscription?.status === "cancelled" && hasCurrentAccess(subscription));
+}
+
 function getPlanCta(subscription: UserSubscription | null) {
   if (!subscription || subscription.status === "cancelled" || subscription.status === "expired") return "Chọn gói";
   if (subscription.status === "pending_payment") return "Hoàn tất thanh toán";
@@ -180,10 +229,12 @@ export default function ProfilePage() {
     );
   }
 
-  const planName = subscription?.status === "active" || subscription?.status === "pending_payment" ? subscription.subscription?.name || "Chưa có gói" : "Chưa có gói";
-  const statusLabel = subscription ? statusLabels[subscription.status] : "Chưa có gói";
-  const isPending = subscription?.status === "pending_payment";
-  const isActive = subscription?.status === "active";
+  const isActive = isCurrentActiveSubscription(subscription);
+  const isCancellationScheduled = isCancelledAtPeriodEnd(subscription);
+  const currentSubscription = isActive || isCancellationScheduled ? subscription : null;
+  const latestInactiveSubscription = subscription && !currentSubscription ? subscription : null;
+  const planName = currentSubscription?.subscription?.name || "Chưa có gói";
+  const statusLabel = isCancellationScheduled ? "Đã hủy gia hạn" : currentSubscription ? statusLabels[currentSubscription.status] : "Không hoạt động";
   const avatarSrc = avatarPreviewUrl || (user.avatar_url ? getImageUrl(user.avatar_url) : "");
 
   return (
@@ -359,7 +410,7 @@ export default function ProfilePage() {
           </div>
 
           <aside className="grid gap-5 self-start">
-            <Card className={isPending ? "border-amber-200 bg-amber-50" : isActive ? "border-emerald-100 bg-emerald-50" : ""}>
+            <Card className={isCancellationScheduled ? "border-amber-200 bg-amber-50" : isActive ? "border-emerald-100 bg-emerald-50" : ""}>
               <div className="flex items-start gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-lg bg-white text-emerald-700 shadow-sm">
                   <CreditCard className="h-5 w-5" />
@@ -373,7 +424,7 @@ export default function ProfilePage() {
               <div className="mt-5 rounded-lg bg-white p-4">
                 <p className="text-sm text-slate-500">Tên gói</p>
                 <p className="mt-1 text-2xl font-bold text-slate-950">{planName}</p>
-                {subscription?.amount ? <p className="mt-1 text-sm text-slate-600">{formatCurrency(Number(subscription.amount))}</p> : null}
+                {currentSubscription?.amount ? <p className="mt-1 text-sm text-slate-600">{formatCurrency(Number(currentSubscription.amount))}</p> : null}
               </div>
 
               <dl className="mt-4 grid gap-3 text-sm">
@@ -381,19 +432,35 @@ export default function ProfilePage() {
                   <dt className="text-slate-500">Trạng thái</dt>
                   <dd className="font-semibold text-slate-950">{statusLabel}</dd>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-lg bg-white px-4 py-3">
-                  <dt className="text-slate-500">Bắt đầu</dt>
-                  <dd className="font-semibold text-slate-950">{formatDate(subscription?.started_at || subscription?.start_date)}</dd>
-                </div>
-                <div className="flex items-center justify-between gap-3 rounded-lg bg-white px-4 py-3">
-                  <dt className="text-slate-500">Hết hạn</dt>
-                  <dd className="font-semibold text-slate-950">{formatDate(subscription?.expires_at || subscription?.end_date)}</dd>
-                </div>
+                {currentSubscription ? (
+                  <>
+                    <div className="flex items-center justify-between gap-3 rounded-lg bg-white px-4 py-3">
+                      <dt className="text-slate-500">Bắt đầu</dt>
+                      <dd className="font-semibold text-slate-950">{formatDate(currentSubscription.started_at || currentSubscription.start_date)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-lg bg-white px-4 py-3">
+                      <dt className="text-slate-500">Hết hạn</dt>
+                      <dd className="font-semibold text-slate-950">{formatDate(currentSubscription.expires_at || currentSubscription.end_date)}</dd>
+                    </div>
+                  </>
+                ) : null}
               </dl>
 
-              {subscription?.payment_reference ? (
+              {!currentSubscription ? (
+                <div className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                  Bạn chưa có gói đăng ký đang hoạt động.
+                </div>
+              ) : null}
+
+              {isCancellationScheduled ? (
+                <p className="mt-4 rounded-lg border border-amber-200 bg-white px-4 py-3 text-sm text-amber-800">
+                  Gói của bạn vẫn còn hiệu lực đến {formatDate(currentSubscription?.expires_at || currentSubscription?.end_date)}. Sau ngày này, gói sẽ hết hạn.
+                </p>
+              ) : null}
+
+              {currentSubscription?.payment_reference ? (
                 <p className="mt-4 rounded-lg bg-white px-4 py-3 text-xs text-slate-600">
-                  Mã tham chiếu: <span className="font-semibold text-slate-900">{subscription.payment_reference}</span>
+                  Mã tham chiếu: <span className="font-semibold text-slate-900">{currentSubscription.payment_reference}</span>
                 </p>
               ) : null}
 
@@ -404,6 +471,36 @@ export default function ProfilePage() {
                 </div>
                 <p className="mt-2">{benefitSummaries[planName] || "Chọn gói để mở khóa quyền lợi phục hồi phù hợp."}</p>
               </div>
+
+              {latestInactiveSubscription ? (
+                <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+                  <h3 className="font-bold text-slate-950">Gói gần nhất</h3>
+                  <dl className="mt-3 grid gap-2 text-slate-700">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-slate-500">Tên gói cũ</dt>
+                      <dd className="font-semibold text-slate-950">{latestInactiveSubscription.subscription?.name || "Chưa có gói"}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-slate-500">Trạng thái</dt>
+                      <dd className="font-semibold text-slate-950">{statusLabels[latestInactiveSubscription.status]}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-slate-500">Bắt đầu</dt>
+                      <dd className="font-semibold text-slate-950">{formatDate(latestInactiveSubscription.started_at || latestInactiveSubscription.start_date)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-slate-500">Hết hạn</dt>
+                      <dd className="font-semibold text-slate-950">{formatDate(latestInactiveSubscription.expires_at || latestInactiveSubscription.end_date)}</dd>
+                    </div>
+                    {latestInactiveSubscription.payment_reference ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-slate-500">Mã tham chiếu</dt>
+                        <dd className="max-w-40 truncate font-semibold text-slate-950">{latestInactiveSubscription.payment_reference}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                </div>
+              ) : null}
 
               {isActive ? (
                 <Button
@@ -417,7 +514,7 @@ export default function ProfilePage() {
 
               <Link href="/patient/pricing" className="mt-3 inline-flex w-full">
                 <Button className="w-full" variant={isActive ? "secondary" : "primary"}>
-                  {getPlanCta(subscription)}
+                  {getPlanCta(currentSubscription)}
                 </Button>
               </Link>
             </Card>

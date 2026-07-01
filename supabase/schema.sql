@@ -3508,6 +3508,35 @@ begin
 end;
 $$;
 
+create or replace function public.expire_stale_patient_subscriptions(target_patient_id uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_expired_count integer := 0;
+begin
+  if target_patient_id is null then
+    return 0;
+  end if;
+
+  update public.user_subscriptions
+  set status = 'expired',
+      expires_at = coalesce(expires_at, now()),
+      updated_at = now()
+  where user_id = target_patient_id
+    and status = 'active'
+    and (
+      end_date < current_date
+      or (expires_at is not null and expires_at < now())
+    );
+
+  get diagnostics v_expired_count = row_count;
+  return v_expired_count;
+end;
+$$;
+
 create or replace function public.get_current_patient_subscription()
 returns table (
   id uuid,
@@ -3549,6 +3578,8 @@ begin
     raise exception 'Only active Patient accounts can read current subscription.';
   end if;
 
+  perform public.expire_stale_patient_subscriptions(v_patient_id);
+
   return query
   select
     user_subscriptions.id,
@@ -3557,7 +3588,11 @@ begin
     user_subscriptions.start_date,
     user_subscriptions.end_date,
     case
-      when user_subscriptions.status = 'active' and user_subscriptions.end_date < current_date then 'expired'
+      when user_subscriptions.status = 'active'
+        and (
+          user_subscriptions.end_date < current_date
+          or (user_subscriptions.expires_at is not null and user_subscriptions.expires_at < now())
+        ) then 'expired'
       else user_subscriptions.status
     end as status,
     user_subscriptions.amount,
@@ -3576,7 +3611,10 @@ begin
   where user_subscriptions.user_id = v_patient_id
   order by
     case
-      when user_subscriptions.status = 'active' and user_subscriptions.end_date >= current_date then 0
+      when user_subscriptions.status = 'active'
+        and user_subscriptions.start_date <= current_date
+        and user_subscriptions.end_date >= current_date
+        and (user_subscriptions.expires_at is null or user_subscriptions.expires_at >= now()) then 0
       when user_subscriptions.status = 'active' then 1
       when user_subscriptions.status = 'pending_payment' then 2
       else 3
@@ -3851,6 +3889,10 @@ grant execute on function public.confirm_subscription_mock_payment(uuid) to auth
 revoke execute on function public.create_subscription_checkout(text) from public;
 revoke execute on function public.create_subscription_checkout(text) from anon;
 grant execute on function public.create_subscription_checkout(text) to authenticated;
+
+revoke execute on function public.expire_stale_patient_subscriptions(uuid) from public;
+revoke execute on function public.expire_stale_patient_subscriptions(uuid) from anon;
+revoke execute on function public.expire_stale_patient_subscriptions(uuid) from authenticated;
 
 revoke execute on function public.get_current_patient_subscription() from public;
 revoke execute on function public.get_current_patient_subscription() from anon;
@@ -5752,6 +5794,8 @@ begin
     raise exception 'Only active Patient accounts can pay for subscriptions.';
   end if;
 
+  perform public.expire_stale_patient_subscriptions(v_patient_id);
+
   if v_plan_key = 'basic' then
     v_plan_name := 'Basic';
     v_plan_tier := 1;
@@ -5792,6 +5836,7 @@ begin
     and user_subscriptions.status = 'active'
     and user_subscriptions.start_date <= current_date
     and user_subscriptions.end_date >= current_date
+    and (user_subscriptions.expires_at is null or user_subscriptions.expires_at >= now())
   order by user_subscriptions.created_at desc
   limit 1;
 
@@ -5840,35 +5885,43 @@ begin
   where user_id = v_patient_id
     and status = 'active'
     and v_active_tier is not null
-    and v_plan_tier > v_active_tier;
+    and v_plan_tier > v_active_tier
+    and start_date <= current_date
+    and end_date >= current_date
+    and (expires_at is null or expires_at >= now());
 
-  insert into public.user_subscriptions (
-    user_id,
-    subscription_id,
-    start_date,
-    end_date,
-    status,
-    amount,
-    payment_method,
-    payment_reference,
-    started_at,
-    expires_at,
-    updated_at
-  )
-  values (
-    v_patient_id,
-    v_subscription_id,
-    current_date,
-    current_date + 30,
-    'active',
-    v_amount,
-    'internal_wallet',
-    'WALLET-SUB-' || to_char(now(), 'YYYYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
-    now(),
-    now() + interval '30 days',
-    now()
-  )
-  returning * into v_subscription;
+  begin
+    insert into public.user_subscriptions (
+      user_id,
+      subscription_id,
+      start_date,
+      end_date,
+      status,
+      amount,
+      payment_method,
+      payment_reference,
+      started_at,
+      expires_at,
+      updated_at
+    )
+    values (
+      v_patient_id,
+      v_subscription_id,
+      current_date,
+      current_date + 30,
+      'active',
+      v_amount,
+      'internal_wallet',
+      'WALLET-SUB-' || to_char(now(), 'YYYYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
+      now(),
+      now() + interval '30 days',
+      now()
+    )
+    returning * into v_subscription;
+  exception
+    when unique_violation then
+      raise exception 'Bạn đã có gói đang hoạt động hoặc gói cũ chưa được cập nhật trạng thái. Vui lòng tải lại trang và thử lại.';
+  end;
 
   update public.wallets
   set balance = v_balance_after,

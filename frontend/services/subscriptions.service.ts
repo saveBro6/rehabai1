@@ -1,6 +1,31 @@
 import { assertNoSupabaseError, getSupabase } from "@/services/common";
 import type { Subscription, UserSubscription } from "@/types";
 
+const STALE_ACTIVE_SUBSCRIPTION_MESSAGE =
+  "Bạn đã có gói đang hoạt động hoặc gói cũ chưa được cập nhật trạng thái. Vui lòng tải lại trang và thử lại.";
+
+function getSubscriptionPaymentErrorMessage(error: unknown) {
+  const message = typeof error === "object" && error !== null && "message" in error ? String((error as { message: unknown }).message) : "";
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    lowerMessage.includes("user_subscriptions_one_active_per_user_idx") ||
+    lowerMessage.includes("duplicate key value violates unique constraint")
+  ) {
+    return STALE_ACTIVE_SUBSCRIPTION_MESSAGE;
+  }
+
+  if (lowerMessage.includes("downgrade or same-tier subscription payment")) {
+    return "Bạn đang sử dụng gói này.";
+  }
+
+  if (lowerMessage.includes("insufficient wallet balance")) {
+    return "Số dư ví không đủ. Vui lòng nạp thêm tiền vào ví RehabAI trước khi mua gói.";
+  }
+
+  return message || "Không thể thanh toán gói bằng ví. Vui lòng thử lại sau.";
+}
+
 export async function getSubscriptions() {
   const supabase = getSupabase();
   const { data, error } = await supabase.from("subscriptions").select("*").order("price", { ascending: true });
@@ -83,7 +108,7 @@ export async function createSubscriptionCheckout(planName: string) {
 export async function paySubscriptionWithWallet(planName: string) {
   const supabase = getSupabase();
   const { data, error } = await supabase.rpc("pay_subscription_with_wallet", { p_plan_type: planName });
-  assertNoSupabaseError(error);
+  if (error) throw new Error(getSubscriptionPaymentErrorMessage(error));
   return data as unknown as UserSubscription;
 }
 
