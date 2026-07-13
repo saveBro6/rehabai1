@@ -17,3 +17,6 @@ build/
 # Supabase Local Development
 .supabase/
 supabase/.temp/
+
+.agents
+skills-lock.json
