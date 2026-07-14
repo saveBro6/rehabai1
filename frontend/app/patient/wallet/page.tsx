@@ -13,14 +13,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import { formatCurrency } from "@/lib/utils";
 import {
-  confirmSimulatedWalletTopup,
   cancelWalletTopup,
   createPayosWalletTopup,
-  createWalletTopup,
   getMyWallet,
   getMyWalletTopups,
   getMyWalletTransactions,
-  isPayosNotConfiguredError,
   type Wallet,
   type WalletTopup,
   type WalletTransaction
@@ -119,10 +116,8 @@ export default function PatientWalletPage() {
   const [pendingTopup, setPendingTopup] = useState<WalletTopup | null>(null);
   const [completedTopup, setCompletedTopup] = useState<WalletTopup | null>(null);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
-  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const isActivePatient = profile?.account_type === "patient" && profile?.account_status === "active";
@@ -132,7 +127,6 @@ export default function PatientWalletPage() {
   const isAmountAboveMaximum = amountValue > MAX_TOPUP_AMOUNT;
   const isAmountValid = amountValue >= MIN_TOPUP_AMOUNT && amountValue <= MAX_TOPUP_AMOUNT;
   const selectedPreset = PRESET_AMOUNTS.find((preset) => preset.amount === amountValue);
-  const isPayosTopup = pendingTopup?.provider === "payos";
   const pendingQrCode = pendingTopup?.provider_qr_code || null;
   const activeRemainingSeconds = getRemainingSeconds(pendingTopup?.expires_at, nowMs);
   const activeTopupExpired = pendingTopup ? isEffectivelyExpired(pendingTopup, nowMs) : false;
@@ -262,7 +256,6 @@ export default function PatientWalletPage() {
     setPendingTopup(null);
     setCompletedTopup(null);
     setQrImageUrl(null);
-    setFallbackNotice(null);
     expiryRefreshTopupIdRef.current = null;
     flowCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -271,7 +264,6 @@ export default function PatientWalletPage() {
     setActiveTopupId(topup.id);
     setPendingTopup(topup);
     setCompletedTopup(null);
-    setFallbackNotice(topup.provider === "simulated" ? "payOS chưa được cấu hình. Đây là yêu cầu nạp ví mô phỏng." : null);
     setFlowStep("payment");
     flowCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -295,7 +287,6 @@ export default function PatientWalletPage() {
     }
 
     setIsCreating(true);
-    setFallbackNotice(null);
 
     try {
       const createdTopup = await createPayosWalletTopup(amountValue);
@@ -303,46 +294,9 @@ export default function PatientWalletPage() {
       await refreshWalletData({ trackedTopupId: createdTopup.id });
       pushToast("Đã tạo mã QR nạp ví", "Quét mã QR hoặc mở trang thanh toán payOS để nạp ví.");
     } catch (error) {
-      if (!isPayosNotConfiguredError(error)) {
-        pushToast("Không thể tạo mã QR nạp ví", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
-        return;
-      }
-
-      const notice = "payOS chưa được cấu hình. Hệ thống đang dùng nạp ví mô phỏng.";
-      setFallbackNotice(notice);
-
-      try {
-        const topup = await createWalletTopup(amountValue);
-        setActiveTopupId(topup.id);
-        setPendingTopup(topup);
-        setCompletedTopup(null);
-        setFlowStep("payment");
-        await refreshWalletData({ trackedTopupId: topup.id });
-        pushToast("Đang dùng nạp ví mô phỏng", "Bạn có thể xác nhận mô phỏng để cộng số dư vào ví.");
-      } catch (fallbackError) {
-        pushToast(
-          "Không thể tạo nạp ví mô phỏng",
-          fallbackError instanceof Error ? fallbackError.message : "Vui lòng thử lại sau."
-        );
-      }
+      pushToast("Không thể tạo mã QR nạp ví", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
     } finally {
       setIsCreating(false);
-    }
-  }
-
-  async function handleConfirmTopup() {
-    if (!pendingTopup || pendingTopup.provider === "payos") return;
-
-    setIsConfirming(true);
-    try {
-      const result = await confirmSimulatedWalletTopup(pendingTopup.id);
-      setWallet(result.wallet);
-      await refreshWalletData({ trackedTopupId: result.topup.id });
-      pushToast("Nạp ví thành công", "Số dư ví đã được cập nhật.");
-    } catch (error) {
-      pushToast("Không thể xác nhận nạp ví", error instanceof Error ? error.message : "Vui lòng thử lại sau.");
-    } finally {
-      setIsConfirming(false);
     }
   }
 
@@ -529,23 +483,13 @@ export default function PatientWalletPage() {
                       <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-emerald-700">
                         <QrCode className="h-6 w-6" />
                       </span>
-                      <h3 className="mt-3 text-xl font-bold text-slate-950">
-                        {isPayosTopup ? "Quét mã QR để nạp ví" : "Xác nhận nạp ví mô phỏng"}
-                      </h3>
+                      <h3 className="mt-3 text-xl font-bold text-slate-950">Quét mã QR để nạp ví</h3>
                       <p className="mt-1 text-sm text-slate-600">
-                        {isPayosTopup
-                          ? "Hoàn tất thanh toán trên payOS, sau đó kiểm tra lại trạng thái."
-                          : "Môi trường hiện tại chưa cấu hình payOS nên đang dùng luồng mô phỏng."}
+                        Hoàn tất thanh toán trên payOS, sau đó kiểm tra lại trạng thái.
                       </p>
                     </div>
 
-                    {fallbackNotice ? (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-                        {fallbackNotice}
-                      </div>
-                    ) : null}
-
-                    {isPayosTopup && pendingTopup.status === "pending" && !activeTopupExpired ? (
+                    {pendingTopup.status === "pending" && !activeTopupExpired ? (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center">
                         <p className="text-sm font-semibold text-emerald-900">Mã QR hết hạn sau 15 phút.</p>
                         <p className="mt-1 text-lg font-bold tabular-nums text-emerald-700">
@@ -566,7 +510,7 @@ export default function PatientWalletPage() {
                       </div>
                     ) : null}
 
-                    {isPayosTopup && qrImageUrl && !activeTopupExpired && !activeTopupCancelled ? (
+                    {qrImageUrl && !activeTopupExpired && !activeTopupCancelled ? (
                       <div className="mx-auto grid place-items-center rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                         <Image
                           src={qrImageUrl}
@@ -579,7 +523,7 @@ export default function PatientWalletPage() {
                       </div>
                     ) : null}
 
-                    {isPayosTopup && !qrImageUrl && !activeTopupExpired && !activeTopupCancelled ? (
+                    {!qrImageUrl && !activeTopupExpired && !activeTopupCancelled ? (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
                         Mã QR chưa sẵn sàng. Bạn vẫn có thể mở trang thanh toán payOS.
                       </div>
@@ -606,8 +550,7 @@ export default function PatientWalletPage() {
                       </div>
                     </div>
 
-                    {isPayosTopup &&
-                    pendingTopup.status === "pending" &&
+                    {pendingTopup.status === "pending" &&
                     !activeTopupExpired &&
                     pendingTopup.provider_checkout_url ? (
                       <a
@@ -621,7 +564,7 @@ export default function PatientWalletPage() {
                       </a>
                     ) : null}
 
-                    {isPayosTopup && pendingTopup.status === "pending" && !activeTopupExpired ? (
+                    {pendingTopup.status === "pending" && !activeTopupExpired ? (
                       <Button
                         className="w-full gap-2"
                         type="button"
@@ -634,12 +577,6 @@ export default function PatientWalletPage() {
                       </Button>
                     ) : null}
 
-                    {!isPayosTopup && pendingTopup.status === "pending" ? (
-                      <Button className="w-full" onClick={handleConfirmTopup} disabled={isConfirming}>
-                        {isConfirming ? "Đang xác nhận..." : "Xác nhận nạp ví mô phỏng"}
-                      </Button>
-                    ) : null}
-
                     {pendingTopup.status === "pending" && !activeTopupExpired ? (
                       <>
                         <Button
@@ -647,7 +584,7 @@ export default function PatientWalletPage() {
                           type="button"
                           variant="ghost"
                           onClick={handleCancelTopup}
-                          disabled={isCancelling || isConfirming}
+                          disabled={isCancelling}
                         >
                           {isCancelling ? "Đang hủy..." : "Hủy giao dịch"}
                         </Button>
@@ -656,7 +593,7 @@ export default function PatientWalletPage() {
                           type="button"
                           variant="ghost"
                           onClick={resetTopupFlow}
-                          disabled={isCancelling || isConfirming}
+                          disabled={isCancelling}
                         >
                           Đổi số tiền khác
                         </Button>
